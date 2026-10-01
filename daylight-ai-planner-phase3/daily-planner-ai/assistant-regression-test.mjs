@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
 import assistant from './netlify/functions/assistant.mjs'
+import intake from './netlify/functions/intake.mjs'
 
 const previousKey=process.env.ANTHROPIC_API_KEY
 const previousFetch=globalThis.fetch
 const request=body=>new Request('https://example.test/api/assistant',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})
+const hasUnsupportedNumberConstraint=schema=>schema&&typeof schema==='object'&&(Object.hasOwn(schema,'minimum')||Object.hasOwn(schema,'maximum')||Object.values(schema).some(hasUnsupportedNumberConstraint))
 
 try {
   delete process.env.ANTHROPIC_API_KEY
@@ -21,6 +23,10 @@ try {
   assert.equal(ok.status,200)
   assert.equal((await ok.json()).reply,'Sure, here is a plan.')
   assert.deepEqual(sent.messages,[{role:'user',content:'Help me plan'},{role:'assistant',content:'Sure'},{role:'user',content:'What about tomorrow?'}])
+  assert.equal(hasUnsupportedNumberConstraint(sent.output_config.format.schema),false)
+
+  await intake(request({text:'I need to finish a project tomorrow.',state:{}}))
+  assert.equal(hasUnsupportedNumberConstraint(sent.output_config.format.schema),false)
 
   globalThis.fetch=async()=>Response.json({error:{type:'authentication_error'}},{status:401})
   const badKey=await assistant(request({message:'hello',state:{items:[]}}))

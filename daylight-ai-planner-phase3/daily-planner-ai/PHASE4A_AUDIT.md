@@ -21,15 +21,16 @@ This checkpoint improves the conversation flow and starts the durable-data work 
 - Local browser: planner state and undo history persisted after reload; Undo restored the previous state.
 - Local browser: Today and History screens rendered without runtime errors.
 - Netlify: `ANTHROPIC_API_KEY` exists and is scoped to Functions. The production deploy has both `assistant` and `intake` Functions.
-- A production chat request using a harmless greeting reached the `assistant` Function (confirmed by a matching function-log invocation), but the current deployed frontend returned its generic configuration message. The new frontend and Function diagnostics are prepared locally but have not yet been deployed, so the provider's actual failure reason remains unverified.
+- A production chat request using a harmless greeting reached the `assistant` Function but failed. The new error category and Function log identified an Anthropic 400 `invalid_request_error`. The structured-output schemas contained numerical constraints unsupported by Anthropic's API. Those fields were removed from both assistant and intake schemas, and a regression check now rejects their reintroduction.
+- Netlify published the corrected Function deploy at 11:26 AM EDT. A live chat request returned a conversational reply without changing the schedule. A live Inbox request returned a correctly typed 20-minute task in review; the proposal was discarded rather than applied.
 
 ## Limits and next checkpoint
 
 - Voice recognition and speech synthesis are unavailable in the Codex in-app browser used for visual QA. The feature is guarded and falls back to typing; a supported browser must be used for a live microphone check.
-- The Anthropic key's validity and account billing status have not been verified through a live AI request. The previous generic frontend error hid the real failure; the new error path will identify it after deployment and use.
+- The Anthropic key and provider account can process at least the small live chat and Inbox requests above. This does not establish capacity or reliability for larger requests.
 - History, conversation, and backups are still local to one browser. Authentication, Postgres, cross-device sync, server-side operation history, and durable Inbox storage remain Milestone 4 work.
 - Netlify Database uses account credits while active. Provisioning it is a separate decision before cloud persistence can be activated.
 
 ## Checkpoint result
 
-The local implementation meets the scoped behavior and regression checks. Cloud persistence remains pending.
+The implementation meets the scoped behavior, regression checks, and production chat/Inbox smoke checks. Cloud persistence remains pending.
