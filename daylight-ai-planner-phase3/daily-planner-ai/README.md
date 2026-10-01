@@ -1,6 +1,6 @@
 # Daylight — AI Daily Planner
 
-Milestone 3 prototype with Checkpoint 4A conversation and local history improvements, designed for Netlify.
+Milestone 4 planner with conversation, local recovery, and an invite-only cloud sync flow on Netlify.
 
 ## What works now
 - Today timeline with fixed and flexible blocks
@@ -33,6 +33,11 @@ Milestone 3 prototype with Checkpoint 4A conversation and local history improvem
 - Quick add task entry without AI, scheduled by the deterministic engine
 - conversational follow-up context and specific AI connection errors
 - persistent local undo history and manual JSON backup export/import
+- invite-only Netlify Identity sign-in and account-scoped cloud data
+- Netlify Database storage for the planner, Inbox, recent conversation, and 20 undo checkpoints
+- revision checks that pause automatic sync when another device changed the plan
+- explicit first-sync choice between the plan on this device and the cloud plan
+- cloud copy deletion while retaining the plan on this device
 
 ## Product architecture
 Claude interprets what the user means. It does not get final authority over time placement.
@@ -66,16 +71,18 @@ Open **Inbox** and paste unstructured notes. The intake interpreter returns:
 
 Nothing is applied immediately. Daylight shows a review screen first. Low-confidence/ambiguous items are unchecked by default. Once accepted, calendar-like items enter the scheduling engine and non-calendar items are stored in the appropriate planning layer.
 
-## Preview without installing anything
-Serve the `site` folder with any static server.
+## Local preview
+Install dependencies, then build the frontend and serve `dist`.
 
 ```bash
-python -m http.server 8080 --directory site
+npm ci
+npm run build
+python -m http.server 8080 --directory dist
 ```
 
 Then open `http://localhost:8080`.
 
-The planner engine, intake review UI, offline intake fallback, checkmarks, Reality Mode, week planning, undo, and local persistence work without the Anthropic API. High-quality AI interpretation requires the Netlify Function endpoint.
+The planner engine, intake review UI, offline intake fallback, checkmarks, Reality Mode, week planning, undo, and local persistence work without the Anthropic API. Netlify Identity, cloud sync, and AI Functions require the deployed Netlify site.
 
 ## Anthropic setup on Netlify
 Create this environment variable for Functions:
@@ -97,7 +104,11 @@ If the provider rejects a request, Planner now shows the relevant error category
 
 Tap the microphone in Planner or Inbox to dictate. Review the transcript before sending it. Browser speech recognition may use the browser vendor's speech service; availability depends on the browser and microphone permission. Spoken replies are optional.
 
-History keeps the last 20 planner undo checkpoints on this device. Use **Download backup** to save a JSON copy of planner data, or **Import backup** to restore one. Keep backups private. This is not cross-device sync; accounts and Postgres remain the next major milestone.
+History keeps the last 20 planner undo checkpoints. Signed-in accounts also save the planner, Inbox, conversation, and undo history in Netlify Database. At first sign-in, Daylight asks whether to use the existing cloud plan or move this device’s plan to cloud. If two devices edit the same plan, automatic sync pauses for a choice. Use **Download backup** to save a JSON copy of planner data and history, or **Import backup** to restore one. Keep backups private. **Delete cloud copy** removes server data while leaving this device’s copy.
+
+## Deployment
+
+Netlify builds the Vite frontend to `dist` and deploys Functions from `netlify/functions`. The SQL migration in `netlify/database/migrations` creates the planner and snapshot tables. Enable Netlify Identity, set registration to **Invite only**, and invite the account owner. Database usage consumes Netlify credits while active; monitor the team balance. The two AI Functions require a signed-in account and keep `ANTHROPIC_API_KEY` on the server.
 
 ## Deploy to Netlify
 1. Put this project in a Git repository and import it into Netlify.

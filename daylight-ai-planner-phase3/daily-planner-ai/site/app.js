@@ -14,6 +14,7 @@ import {
   applyIntakeAnalysis,
   localIntakeFallback,
 } from './intake.js'
+import { getUser, login, logout, handleAuthCallback, acceptInvite } from '@netlify/identity'
 
 const STORAGE_KEY = 'daylight-planner-v03-static'
 const LEGACY_STORAGE_KEY = 'daylight-planner-v02-static'
@@ -110,7 +111,7 @@ function load() {
     return clone(initialState)
   } catch { return clone(initialState) }
 }
-function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) }
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); queueCloudSave() }
 function loadHistory() {
   try {
     const saved=JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY))
@@ -119,7 +120,7 @@ function loadHistory() {
 }
 function saveHistory() {
   while(undoStack.length){
-    try { localStorage.setItem(HISTORY_STORAGE_KEY,JSON.stringify(undoStack));return }
+    try { localStorage.setItem(HISTORY_STORAGE_KEY,JSON.stringify(undoStack));queueCloudSave();return }
     catch { undoStack.shift() }
   }
   try { localStorage.removeItem(HISTORY_STORAGE_KEY) } catch { /* Storage may be unavailable. */ }
@@ -131,11 +132,11 @@ function loadConversation() {
   } catch { return [] }
 }
 function saveConversation() {
-  try { localStorage.setItem(CONVERSATION_STORAGE_KEY,JSON.stringify(messages.slice(-30).map(({id,role,text,error})=>({id,role,text,error:!!error})))) }
+  try { localStorage.setItem(CONVERSATION_STORAGE_KEY,JSON.stringify(messages.slice(-30).map(({id,role,text,error})=>({id,role,text,error:!!error}))));queueCloudSave() }
   catch { /* The planner remains usable if browser storage is full. */ }
 }
 function exportBackup() {
-  const backup={format:'daylight-backup-v1',exportedAt:new Date().toISOString(),state}
+  const backup={format:'daylight-backup-v2',exportedAt:new Date().toISOString(),state,history:undoStack,conversation:cloudPayload().conversation}
   const url=URL.createObjectURL(new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}))
   const link=document.createElement('a')
   link.href=url
@@ -149,14 +150,23 @@ async function importBackup(event) {
   try {
     if(file.size>5_000_000)throw new Error('Backup is too large.')
     const backup=JSON.parse(await file.text())
-    if(backup?.format!=='daylight-backup-v1'||!backup.state||!Array.isArray(backup.state.items)||!Array.isArray(backup.state.rules))throw new Error('This is not a Daylight backup.')
+    if(!['daylight-backup-v1','daylight-backup-v2'].includes(backup?.format)||!backup.state||!Array.isArray(backup.state.items)||!Array.isArray(backup.state.rules))throw new Error('This is not a Daylight backup.')
     const safeId=value=>typeof value==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(value)
     const safeTime=value=>!value||typeof value==='string'&&/^([01]\d|2[0-3]):[0-5]\d$/.test(value)
     if(backup.state.items.length>5000||backup.state.items.some(item=>!safeId(item?.id)||!['event','task','routine','reflection','buffer'].includes(item.kind)||!DAYS.includes(item.day)||!safeTime(item.start)||!safeTime(item.end)||item.subtasks?.some(step=>!safeId(step?.id))))throw new Error('Backup has invalid planner items.')
     for(const collection of [backup.state.goals||[],backup.state.metrics||[]])if(!Array.isArray(collection)||collection.some(item=>!item||!Number.isFinite(Number(item.progress||0))||!Number.isFinite(Number(item.target||0))))throw new Error('Backup has invalid goals or metrics.')
+    if(backup.format==='daylight-backup-v2'&&(!Array.isArray(backup.history)||backup.history.length>HISTORY_LIMIT||!Array.isArray(backup.conversation)||backup.conversation.length>30))throw new Error('Backup history is invalid.')
     if(!confirm(`Replace this device’s planner with the backup from ${new Date(backup.exportedAt).toLocaleString()}? You can undo this import from History.`))return
+    const previousState=clone(state)
     pushUndo('Before backup import')
     state=migrate(backup.state)
+    if(backup.format==='daylight-backup-v2'){
+      undoStack=backup.history.filter(entry=>entry&&typeof entry.label==='string'&&entry.state&&typeof entry.state==='object')
+      undoStack.push({label:'Before backup import',at:new Date().toISOString(),state:previousState})
+      undoStack=undoStack.slice(-HISTORY_LIMIT)
+      messages=backup.conversation.filter(turn=>['user','assistant'].includes(turn?.role)&&typeof turn.text==='string')
+      saveHistory()
+    }
     save()
     messages.push({id:uid(),role:'assistant',text:'Backup imported. Your previous planner is available through Undo.'})
     render()
@@ -191,6 +201,17 @@ let brainDumpText = ''
 let intakeDraft = null
 let messages = loadConversation()
 if(!messages.length)messages=[{ id:'hello', role:'assistant', text:"Tell me what changed, what you need to get done, or how you're feeling about the day. I’ll interpret it, then the planning engine will find feasible time." }]
+let accountUser = null
+let accountStatus = 'Checking sign-in…'
+let accountError = ''
+let inviteToken = ''
+let cloudCopy = null
+let cloudRevision = 0
+let cloudReady = false
+let cloudSaveTimer = 0
+let cloudSaving = false
+let cloudSaveQueued = false
+let lastSyncedPayload = ''
 
 const app = document.querySelector('#app')
 
@@ -209,7 +230,7 @@ function render() {
 function sidebar() {
   const inboxPending = state.inbox.filter(i => i.status !== 'applied').length
   return `<aside class="sidebar">
-    <div class="brand"><span class="brand-dot"></span>Daylight <span class="phase-pill">M3</span></div>
+    <div class="brand"><span class="brand-dot"></span>Daylight <span class="phase-pill">M4</span></div>
     <nav>
       ${navButton('today','☀','Today')}
       ${navButton('week','▦','Week')}
@@ -218,11 +239,106 @@ function sidebar() {
       ${navButton('history','↶','History')}
     </nav>
     <div class="sidebar-spacer"></div>
+    ${accountControls()}
     <div class="mini-label">Planning memory</div>
     <div class="rule-preview">${state.rules.length} rules · ${state.openLoops.length} open loops</div>
     <button class="ghost-button" data-action="undo" ${undoStack.length?'':'disabled'}><span class="icon">↶</span> Undo planner change</button>
     <button class="ghost-button" data-action="reset"><span class="icon">↺</span> Reset prototype</button>
   </aside>`
+}
+function accountControls() {
+  if(inviteToken)return `<form class="account-box" id="invite-form"><strong>Accept invitation</strong><p>Choose a password to create your private Daylight account.</p><label for="invite-password">Password</label><input id="invite-password" type="password" autocomplete="new-password" required minlength="8"><button type="submit">Create account</button>${accountError?`<small role="alert">${esc(accountError)}</small>`:''}</form>`
+  if(!accountUser)return `<form class="account-box" id="login-form"><strong>Cloud sync</strong><p>${esc(accountStatus)}</p><label for="login-email">Email</label><input id="login-email" type="email" autocomplete="username" required><label for="login-password">Password</label><input id="login-password" type="password" autocomplete="current-password" required><button type="submit">Sign in</button>${accountError?`<small role="alert">${esc(accountError)}</small>`:''}</form>`
+  return `<div class="account-box"><strong>${esc(accountUser.email||'Signed in')}</strong><p>${esc(accountStatus)}</p>${cloudCopy?`<div class="account-choice">${cloudCopy.exists?'<button data-action="use-cloud">Use cloud plan</button>':''}<button data-action="use-local">Move this device’s plan to cloud</button></div>`:''}<button class="account-quiet" data-action="sign-out">Sign out</button><button class="account-quiet danger" data-action="delete-cloud">Delete cloud copy</button>${accountError?`<small role="alert">${esc(accountError)}</small>`:''}</div>`
+}
+
+function cloudPayload() {
+  return {state,history:undoStack,conversation:messages.slice(-30).map(({id,role,text,error})=>({id,role,text,error:!!error}))}
+}
+function queueCloudSave() {
+  if(!cloudReady || !accountUser)return
+  if(JSON.stringify(cloudPayload())===lastSyncedPayload)return
+  clearTimeout(cloudSaveTimer)
+  cloudSaveTimer=setTimeout(saveToCloud,1200)
+}
+async function saveToCloud(force=false) {
+  if(!accountUser || (!cloudReady && !force))return
+  if(cloudSaving){cloudSaveQueued=true;return}
+  const snapshot=cloudPayload()
+  const snapshotText=JSON.stringify(snapshot)
+  if(!force&&snapshotText===lastSyncedPayload)return
+  cloudSaving=true
+  const payload={...snapshot,expectedRevision:cloudRevision,force,label:undoStack.at(-1)?.label||'Saved planner'}
+  try {
+    const response=await fetch('/api/planner-state',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(payload)})
+    const result=await response.json()
+    if(response.status===409){cloudReady=false;accountStatus='Another device changed your plan. Choose which copy to keep.';accountError='Automatic sync paused to protect your changes.';await loadCloudCopy()}
+    else if(!response.ok)throw new Error(result.error||'Cloud save failed. Your changes are still saved on this device.')
+    else {cloudRevision=result.revision;lastSyncedPayload=snapshotText;cloudCopy=null;cloudReady=true;accountStatus='Synced across your devices';accountError='';renderAccountStatus();if(JSON.stringify(cloudPayload())!==snapshotText)cloudSaveQueued=true}
+  } catch(error){accountStatus='Saved on this device. Cloud sync will retry.';accountError=error.message;renderAccountStatus()}
+  finally {cloudSaving=false;if(cloudSaveQueued){cloudSaveQueued=false;queueCloudSave()}}
+}
+function renderAccountStatus(){const box=document.querySelector('.account-box');if(box&&accountUser){box.querySelector('p').textContent=accountStatus;let alert=box.querySelector('[role="alert"]');if(accountError&&!alert){alert=document.createElement('small');alert.setAttribute('role','alert');box.append(alert)}if(alert)alert.textContent=accountError}}
+async function loadCloudCopy() {
+  accountStatus='Checking your cloud plan…';accountError='';render()
+  try {
+    const response=await fetch('/api/planner-state',{cache:'no-store'})
+    if(!response.ok)throw new Error(response.status===401?'Please sign in again.':'Cloud storage is temporarily unavailable.')
+    const remote=await response.json()
+    if(!remote.exists){cloudCopy={exists:false};cloudRevision=0;accountStatus='Your plan is saved on this device. Move it to cloud to sync.'}
+    else {
+      cloudRevision=remote.revision
+      const localExists=!!localStorage.getItem(STORAGE_KEY)
+      if(!localExists || JSON.stringify(state)===JSON.stringify(remote.state))applyCloudCopy(remote)
+      else {cloudCopy=remote;accountStatus='A cloud plan and a different plan on this device were found. Choose which to keep.'}
+    }
+  } catch(error){accountStatus='Your plan remains saved on this device.';accountError=error.message}
+  render()
+}
+function applyCloudCopy(remote) {
+  cloudReady=false
+  state=migrate(remote.state)
+  undoStack=Array.isArray(remote.history)?remote.history.slice(-HISTORY_LIMIT):[]
+  messages=Array.isArray(remote.conversation)&&remote.conversation.length?remote.conversation.slice(-30):messages
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(state))
+  localStorage.setItem(HISTORY_STORAGE_KEY,JSON.stringify(undoStack))
+  saveConversation()
+  cloudRevision=remote.revision
+  lastSyncedPayload=JSON.stringify(cloudPayload())
+  cloudCopy=null;cloudReady=true;accountStatus='Synced across your devices';accountError=''
+}
+async function initializeAccount() {
+  try {
+    const callback=await handleAuthCallback()
+    if(callback?.type==='invite'&&callback.token){inviteToken=callback.token;accountStatus='Complete your invitation';render();return}
+    accountUser=await getUser()
+    if(accountUser)await loadCloudCopy()
+    else accountStatus='Sign in with your invitation to sync across devices.'
+  } catch(error){accountStatus='Cloud sign-in is available on the deployed Netlify site.';accountError=error.message||''}
+  render()
+}
+async function signIn(event) {
+  event.preventDefault();accountError='';accountStatus='Signing in…';renderAccountStatus()
+  try {accountUser=await login(event.target.querySelector('#login-email').value,event.target.querySelector('#login-password').value);await loadCloudCopy()}
+  catch(error){accountStatus='Sign in failed.';accountError=error.message||'Check your email and password.';render()}
+}
+async function acceptAccountInvite(event) {
+  event.preventDefault()
+  try {accountUser=await acceptInvite(inviteToken,event.target.querySelector('#invite-password').value);inviteToken='';await loadCloudCopy()}
+  catch(error){accountError=error.message||'Invitation could not be accepted.';render()}
+}
+async function signOut() {
+  clearTimeout(cloudSaveTimer);cloudReady=false
+  try {await logout()} catch(error){accountError=error.message||'Sign out failed.';render();return}
+  accountUser=null;cloudCopy=null;cloudRevision=0;lastSyncedPayload='';accountStatus='Sign in with your invitation to sync across devices.';accountError='';render()
+}
+async function deleteCloudCopy() {
+  if(!confirm('Delete your cloud plan and saved history? The plan on this device will remain. This cannot be undone.'))return
+  try {
+    const response=await fetch('/api/planner-state',{method:'DELETE'})
+    if(!response.ok)throw new Error('Cloud copy could not be deleted. Please try again.')
+    cloudReady=false;cloudCopy={exists:false};cloudRevision=0;lastSyncedPayload='';accountStatus='Cloud copy deleted. Your plan is still on this device.';accountError='';render()
+  } catch(error){accountError=error.message;renderAccountStatus()}
 }
 function navButton(id, icon, label) { return `<button class="nav-item ${view===id?'active':''}" data-view="${id}"><span class="icon">${icon}</span>${label}</button>` }
 
@@ -299,7 +415,7 @@ function goalsView() {
   <div class="goal-grid">${state.goals.map(goalCard).join('')}${state.metrics.map(metricCard).join('')}${state.openLoops.map(openLoopCard).join('')}</div></div>`
 }
 function historyView() {
-  return `<div class="view-pad"><div class="eyebrow">PLANNER HISTORY</div><h1>Recent changes</h1><p class="page-intro">Your last ${HISTORY_LIMIT} planner checkpoints are kept on this device so you can undo a change after a refresh.</p>
+  return `<div class="view-pad"><div class="eyebrow">PLANNER HISTORY</div><h1>Recent changes</h1><p class="page-intro">Your last ${HISTORY_LIMIT} planner checkpoints survive a refresh and sync after you sign in.</p>
     <div class="backup-tools"><button class="secondary-button" data-action="export-backup">Download backup</button><label class="secondary-button" for="import-backup">Import backup</label><input id="import-backup" type="file" accept=".json,application/json" hidden><span>Backups include your personal planner notes. Keep the file private.</span></div>
     ${undoStack.length?`<div class="history-list">${undoStack.slice().reverse().map((entry,index)=>`<div class="history-entry"><div><strong>${esc(entry.label)}</strong><time>${esc(entry.at?new Date(entry.at).toLocaleString():'Earlier')}</time></div>${index===0?'<button class="secondary-button" data-action="undo-history">Undo this change</button>':''}</div>`).join('')}</div>`:'<div class="empty-state">No planner changes yet.</div>'}
   </div>`
@@ -372,6 +488,12 @@ function proposalCard(p,index,messageId) {
 }
 
 function bindEvents() {
+  document.querySelector('#login-form')?.addEventListener('submit',signIn)
+  document.querySelector('#invite-form')?.addEventListener('submit',acceptAccountInvite)
+  document.querySelector('[data-action="sign-out"]')?.addEventListener('click',signOut)
+  document.querySelector('[data-action="delete-cloud"]')?.addEventListener('click',deleteCloudCopy)
+  document.querySelector('[data-action="use-cloud"]')?.addEventListener('click',()=>{if(!cloudCopy?.exists)return;if(!confirm('Use the cloud plan on this device? Your current device plan will be replaced. Export a backup first if you want to keep it.'))return;applyCloudCopy(cloudCopy);render()})
+  document.querySelector('[data-action="use-local"]')?.addEventListener('click',()=>{if(cloudCopy?.exists&&!confirm('Replace the cloud plan with this device’s plan? The previous cloud plan will be replaced.'))return;saveToCloud(true).then(()=>render())})
   document.querySelectorAll('[data-view]').forEach(el=>el.onclick=()=>{stopVoice();view=el.dataset.view;render()})
   document.querySelectorAll('[data-day]').forEach(el=>el.onclick=()=>{selectedDay=el.dataset.day;render()})
   document.querySelectorAll('[data-open-day]').forEach(el=>el.onclick=()=>{selectedDay=el.dataset.openDay;view='today';render()})
@@ -536,6 +658,7 @@ async function apiError(response) {
   return Object.assign(new Error(data.error||`Request failed (${response.status}).`),{status:response.status,code:data.code||''})
 }
 function connectionErrorMessage(error) {
+  if(error.status===401) return 'Sign in to your Daylight account to use the AI planner. Your local plan remains available.'
   if(error.code==='missing_key') return 'The AI key is missing from the Netlify Functions environment. Add ANTHROPIC_API_KEY there, then redeploy.'
   if(error.code==='provider_auth') return 'The AI provider rejected the key. Check that the Anthropic key is active and belongs to the right account.'
   if(error.code==='provider_balance') return 'The Anthropic account could not process this request because of its billing or usage status.'
@@ -682,3 +805,6 @@ function attr(v=''){return esc(v)}
 function esc(v=''){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
 
 render()
+initializeAccount()
+window.addEventListener('online', queueCloudSave)
+document.addEventListener('visibilitychange', () => { if(!document.hidden)queueCloudSave() })

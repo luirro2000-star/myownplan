@@ -1,13 +1,17 @@
 import assert from 'node:assert/strict'
-import assistant from './netlify/functions/assistant.mjs'
-import intake from './netlify/functions/intake.mjs'
+import { handleAssistant } from './netlify/functions/assistant.mjs'
+import { handleIntake } from './netlify/functions/intake.mjs'
 
 const previousKey=process.env.ANTHROPIC_API_KEY
 const previousFetch=globalThis.fetch
+const assistant=(req,options={})=>handleAssistant(req,{currentUser:async()=>({id:'test-user'}),...options})
+const intake=req=>handleIntake(req,{currentUser:async()=>({id:'test-user'})})
 const request=body=>new Request('https://example.test/api/assistant',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})
 const hasUnsupportedNumberConstraint=schema=>schema&&typeof schema==='object'&&(Object.hasOwn(schema,'minimum')||Object.hasOwn(schema,'maximum')||Object.values(schema).some(hasUnsupportedNumberConstraint))
 
 try {
+  const unauthorized=await handleAssistant(request({message:'hello'}),{currentUser:async()=>null})
+  assert.equal(unauthorized.status,401)
   delete process.env.ANTHROPIC_API_KEY
   const missing=await assistant(request({message:'hello'}))
   assert.equal(missing.status,503)

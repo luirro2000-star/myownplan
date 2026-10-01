@@ -450,4 +450,14 @@ Alongside that foundation, goal decomposition should become the first higher-lev
 - Quick task entry without AI, scheduled through the deterministic engine.
 - Persistent local undo history and manual JSON backup export/import.
 
-These changes do not complete Milestone 4. The next checkpoint is authentication and a Postgres-backed source of truth for planner items, Inbox captures, operations, and snapshots, followed by migration from local data. Provisioning the production database requires a Netlify credits decision.
+These changes do not complete Milestone 4. The next checkpoint is authentication and a Postgres-backed source of truth for planner items, Inbox captures, operations, and snapshots, followed by migration from local data.
+
+### Checkpoint 4B — accounts and cloud foundation (implemented locally 2026-10-01)
+
+- Netlify Identity configured for invite-only registration. The account owner completes invitation acceptance and chooses a password.
+- Netlify Database migration stores account-scoped planner state, Inbox captures, recent conversation, undo history, and the last 20 planner snapshots.
+- The app gives an explicit choice when a local plan and cloud plan differ. Revision checks pause sync rather than silently overwriting another device’s work.
+- JSON backup now includes history and conversation. Cloud deletion leaves the device copy intact.
+- AI endpoints require sign-in, protecting the server-side API key from anonymous use.
+
+Production deployment and owner account acceptance must be verified before marking this checkpoint complete. Subsequent work: server-side restoration of earlier snapshots, per-operation event history, persistent unresolved questions, then goal decomposition.
