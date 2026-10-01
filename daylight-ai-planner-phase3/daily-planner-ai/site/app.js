@@ -17,6 +17,8 @@ import {
 
 const STORAGE_KEY = 'daylight-planner-v03-static'
 const LEGACY_STORAGE_KEY = 'daylight-planner-v02-static'
+const HISTORY_STORAGE_KEY = 'daylight-history-v1'
+const CONVERSATION_STORAGE_KEY = 'daylight-conversation-v1'
 const HISTORY_LIMIT = 20
 
 const morningSteps = () => [
@@ -109,6 +111,60 @@ function load() {
   } catch { return clone(initialState) }
 }
 function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) }
+function loadHistory() {
+  try {
+    const saved=JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY))
+    return Array.isArray(saved)?saved.filter(entry=>entry&&typeof entry.label==='string'&&entry.state&&typeof entry.state==='object').slice(-HISTORY_LIMIT):[]
+  } catch { return [] }
+}
+function saveHistory() {
+  while(undoStack.length){
+    try { localStorage.setItem(HISTORY_STORAGE_KEY,JSON.stringify(undoStack));return }
+    catch { undoStack.shift() }
+  }
+  try { localStorage.removeItem(HISTORY_STORAGE_KEY) } catch { /* Storage may be unavailable. */ }
+}
+function loadConversation() {
+  try {
+    const saved=JSON.parse(localStorage.getItem(CONVERSATION_STORAGE_KEY))
+    return Array.isArray(saved)?saved.filter(turn=>['user','assistant'].includes(turn?.role)&&typeof turn.text==='string').slice(-30):[]
+  } catch { return [] }
+}
+function saveConversation() {
+  try { localStorage.setItem(CONVERSATION_STORAGE_KEY,JSON.stringify(messages.slice(-30).map(({id,role,text,error})=>({id,role,text,error:!!error})))) }
+  catch { /* The planner remains usable if browser storage is full. */ }
+}
+function exportBackup() {
+  const backup={format:'daylight-backup-v1',exportedAt:new Date().toISOString(),state}
+  const url=URL.createObjectURL(new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}))
+  const link=document.createElement('a')
+  link.href=url
+  link.download=`daylight-backup-${new Date().toISOString().slice(0,10)}.json`
+  link.click()
+  setTimeout(()=>URL.revokeObjectURL(url),1000)
+}
+async function importBackup(event) {
+  const file=event.target.files?.[0]
+  if(!file)return
+  try {
+    if(file.size>5_000_000)throw new Error('Backup is too large.')
+    const backup=JSON.parse(await file.text())
+    if(backup?.format!=='daylight-backup-v1'||!backup.state||!Array.isArray(backup.state.items)||!Array.isArray(backup.state.rules))throw new Error('This is not a Daylight backup.')
+    const safeId=value=>typeof value==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(value)
+    const safeTime=value=>!value||typeof value==='string'&&/^([01]\d|2[0-3]):[0-5]\d$/.test(value)
+    if(backup.state.items.length>5000||backup.state.items.some(item=>!safeId(item?.id)||!['event','task','routine','reflection','buffer'].includes(item.kind)||!DAYS.includes(item.day)||!safeTime(item.start)||!safeTime(item.end)||item.subtasks?.some(step=>!safeId(step?.id))))throw new Error('Backup has invalid planner items.')
+    for(const collection of [backup.state.goals||[],backup.state.metrics||[]])if(!Array.isArray(collection)||collection.some(item=>!item||!Number.isFinite(Number(item.progress||0))||!Number.isFinite(Number(item.target||0))))throw new Error('Backup has invalid goals or metrics.')
+    if(!confirm(`Replace this device’s planner with the backup from ${new Date(backup.exportedAt).toLocaleString()}? You can undo this import from History.`))return
+    pushUndo('Before backup import')
+    state=migrate(backup.state)
+    save()
+    messages.push({id:uid(),role:'assistant',text:'Backup imported. Your previous planner is available through Undo.'})
+    render()
+  } catch(error) {
+    messages.push({id:uid(),role:'assistant',text:error.message||'The backup could not be imported.',error:true})
+    render()
+  }
+}
 function detroitDay() {
   const d = new Intl.DateTimeFormat('en-US',{weekday:'long',timeZone:'America/Detroit'}).format(new Date())
   return DAYS.includes(d) ? d : 'Monday'
@@ -121,20 +177,26 @@ function detroitMinutes() {
 }
 
 let state = load()
-let undoStack = []
+let undoStack = loadHistory()
 let selectedDay = detroitDay()
 let view = 'today'
 let chatOpen = true
 let sending = false
 let intakeSending = false
+let voiceSession = null
+let voiceTarget = ''
+let readRepliesAloud = false
+try { readRepliesAloud = localStorage.getItem('daylight-read-replies') === 'true' } catch { /* Browser storage may be unavailable. */ }
 let brainDumpText = ''
 let intakeDraft = null
-let messages = [{ id:'hello', role:'assistant', text:"Tell me what changed, what you need to get done, or how you're feeling about the day. I’ll interpret it, then the planning engine will find feasible time." }]
+let messages = loadConversation()
+if(!messages.length)messages=[{ id:'hello', role:'assistant', text:"Tell me what changed, what you need to get done, or how you're feeling about the day. I’ll interpret it, then the planning engine will find feasible time." }]
 
 const app = document.querySelector('#app')
 
 function render() {
-  const main = view === 'today' ? todayView() : view === 'week' ? weekView() : view === 'goals' ? goalsView() : inboxView()
+  saveConversation()
+  const main = view === 'today' ? todayView() : view === 'week' ? weekView() : view === 'goals' ? goalsView() : view === 'history' ? historyView() : inboxView()
   app.innerHTML = `<div class="app-shell">
     ${sidebar()}
     <main class="main-panel">${main}</main>
@@ -153,6 +215,7 @@ function sidebar() {
       ${navButton('week','▦','Week')}
       ${navButton('goals','◎','Goals')}
       ${navButton('inbox','⌁',`Inbox${inboxPending?` · ${inboxPending}`:''}`)}
+      ${navButton('history','↶','History')}
     </nav>
     <div class="sidebar-spacer"></div>
     <div class="mini-label">Planning memory</div>
@@ -181,6 +244,7 @@ function todayView() {
       ${summary(formatMinutes(metrics.protectedFreeMinutes),'protected free')}
     </section>
     ${plannerNotice(metrics, conflicts, unscheduled)}
+    <form class="quick-add" id="quick-add-form"><label for="quick-add-title">Quick add a task</label><input id="quick-add-title" name="title" placeholder="What needs doing?" required maxlength="120"><label class="sr-only" for="quick-add-duration">Minutes</label><select id="quick-add-duration" name="duration"><option value="15">15 min</option><option value="30" selected>30 min</option><option value="60">1 hour</option><option value="120">2 hours</option></select><button type="submit">Add to ${esc(selectedDay)}</button></form>
     <section class="timeline">${items.length ? items.map(timelineItem).join('') : '<div class="empty-state">Nothing scheduled yet. Tell the planner what you want to do.</div>'}</section>`
 }
 function summary(value,label) { return `<div class="summary-stat"><strong>${value}</strong><span>${label}</span></div>` }
@@ -234,6 +298,12 @@ function goalsView() {
   return `<div class="view-pad"><div class="eyebrow">GOALS, METRICS & OPEN LOOPS</div><h1>What the week is for</h1><p class="page-intro">Goals stay separate from the calendar until they produce a concrete next action. Open loops keep important intentions visible without pretending they already have a schedule.</p>
   <div class="goal-grid">${state.goals.map(goalCard).join('')}${state.metrics.map(metricCard).join('')}${state.openLoops.map(openLoopCard).join('')}</div></div>`
 }
+function historyView() {
+  return `<div class="view-pad"><div class="eyebrow">PLANNER HISTORY</div><h1>Recent changes</h1><p class="page-intro">Your last ${HISTORY_LIMIT} planner checkpoints are kept on this device so you can undo a change after a refresh.</p>
+    <div class="backup-tools"><button class="secondary-button" data-action="export-backup">Download backup</button><label class="secondary-button" for="import-backup">Import backup</label><input id="import-backup" type="file" accept=".json,application/json" hidden><span>Backups include your personal planner notes. Keep the file private.</span></div>
+    ${undoStack.length?`<div class="history-list">${undoStack.slice().reverse().map((entry,index)=>`<div class="history-entry"><div><strong>${esc(entry.label)}</strong><time>${esc(entry.at?new Date(entry.at).toLocaleString():'Earlier')}</time></div>${index===0?'<button class="secondary-button" data-action="undo-history">Undo this change</button>':''}</div>`).join('')}</div>`:'<div class="empty-state">No planner changes yet.</div>'}
+  </div>`
+}
 function goalCard(g){
   const pct=g.target?Math.min(100,Math.round((g.progress/g.target)*100)):0
   return `<article class="goal-card"><div class="goal-top"><span>${esc(g.cadence||'Ongoing')}</span><strong>${g.target?`${g.progress}/${g.target}`:''}</strong></div><h2>${esc(g.title)}</h2><div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div><p>${esc(g.unit||'')}${g.minimumDurationMinutes?` · minimum ${g.minimumDurationMinutes}m each`:''}${g.note?` · ${esc(g.note)}`:''}</p>${g.id==='points'?`<div class="score-input"><input data-goal-progress="points" type="range" min="0" max="4000" step="100" value="${g.progress}"></div>`:''}</article>`
@@ -253,7 +323,7 @@ function inboxView() {
     <section class="intake-composer">
       <div class="intake-copy"><div class="mini-label">UNSTRUCTURED INPUT</div><h2>What does your life look like right now?</h2><p>Paste notes, a weekly schedule, worries, goals, habits, deadlines, or half-formed plans. Nothing changes until you review it.</p></div>
       <textarea id="brain-dump-input" placeholder="Monday\n8:30 - Matt\n7:15 - Motion 3D\n\nMake my bed every day...">${esc(brainDumpText)}</textarea>
-      <div class="intake-actions"><button class="secondary-button" data-action="sample-intake">Use example</button><button class="reality-button" data-action="analyze-intake" ${intakeSending?'disabled':''}>${intakeSending?'Interpreting…':'✦ Understand this'}</button></div>
+      <div class="intake-actions"><button class="secondary-button" data-action="sample-intake">Use example</button><div class="intake-action-group"><button class="secondary-button" type="button" data-voice="inbox" aria-label="Speak brain dump">🎙 Speak</button><button class="reality-button" data-action="analyze-intake" ${intakeSending?'disabled':''}>${intakeSending?'Interpreting…':'✦ Understand this'}</button></div></div><div class="voice-status" data-voice-status="inbox" aria-live="polite"></div><p class="voice-note">Your browser handles transcription and may use its speech service. Review the text before sending it to Daylight.</p>
     </section>
     ${review}
     ${history}
@@ -285,14 +355,14 @@ function intakeCard(entry,index){
 }
 function inboxHistoryCard(item){
   const counts=item.counts||{}
-  return `<article class="inbox-history-card"><div><div class="history-top"><span>${esc(item.status||'captured')}</span><time>${esc(item.createdLabel||'')}</time></div><h3>${esc(item.summary||'Brain dump')}</h3><p>${esc(shorten(item.rawText||'',180))}</p></div><div class="history-counts">${Object.entries(counts).map(([k,v])=>v?`<span>${v} ${typeLabel(k)}${v===1?'':'s'}</span>`:'').join('')}</div></article>`
+  return `<article class="inbox-history-card"><div><div class="history-top"><span>${esc(item.status||'captured')}</span><time>${esc(item.createdLabel||'')}</time></div><h3>${esc(item.summary||'Brain dump')}</h3><p>${esc(shorten(item.rawText||'',180))}</p></div><div class="history-counts">${Object.entries(counts).map(([k,v])=>v?`<span>${esc(v)} ${esc(typeLabel(k))}${v===1?'':'s'}</span>`:'').join('')}</div></article>`
 }
 
 function assistantPanel() {
   return `<aside class="assistant-panel ${chatOpen?'':'collapsed'}"><button class="assistant-toggle" data-action="chat-toggle">◌</button>${chatOpen?`
     <div class="assistant-head"><div class="assistant-title"><span class="icon">✦</span> Planner</div><div class="assistant-status">AI understands intent · engine owns time arithmetic</div></div>
     <div class="chat-thread">${messages.map(chatBubble).join('')}${sending?'<div class="thinking"><span class="spin">↻</span> Interpreting what changed…</div>':''}</div>
-    <div class="composer"><textarea id="chat-input" placeholder="Tell me what's going on…" rows="3"></textarea><button data-action="send">➤</button><div class="composer-hint">For a whole messy schedule or life update, use Inbox. For changes to today, just tell me here.</div></div>`:''}</aside>`
+    <div class="composer"><textarea id="chat-input" placeholder="Tell me what's going on…" rows="3"></textarea><button data-action="send" aria-label="Send message">➤</button><button type="button" class="voice-button" data-voice="chat" aria-label="Speak to planner">🎙</button><div class="voice-status" data-voice-status="chat" aria-live="polite"></div><div class="composer-tools"><button type="button" data-action="read-aloud" aria-pressed="${readRepliesAloud}">${readRepliesAloud?'🔊 Voice replies on':'🔈 Read replies aloud'}</button></div><div class="composer-hint">Your browser handles voice transcription. Review the text, then send it. Proposed changes still need your approval.</div></div>`:''}</aside>`
 }
 function chatBubble(m) {
   return `<div class="bubble-wrap ${m.role}"><div class="bubble">${esc(m.text)}</div>${m.proposals?.length?`<div class="proposal-list">${m.proposals.map((p,i)=>proposalCard(p,i,m.id)).join('')}</div>`:''}${m.questions?.map(q=>`<div class="question-chip">${esc(q)}</div>`).join('')||''}</div>`
@@ -302,7 +372,7 @@ function proposalCard(p,index,messageId) {
 }
 
 function bindEvents() {
-  document.querySelectorAll('[data-view]').forEach(el=>el.onclick=()=>{view=el.dataset.view;render()})
+  document.querySelectorAll('[data-view]').forEach(el=>el.onclick=()=>{stopVoice();view=el.dataset.view;render()})
   document.querySelectorAll('[data-day]').forEach(el=>el.onclick=()=>{selectedDay=el.dataset.day;render()})
   document.querySelectorAll('[data-open-day]').forEach(el=>el.onclick=()=>{selectedDay=el.dataset.openDay;view='today';render()})
   document.querySelectorAll('[data-toggle]').forEach(el=>el.onclick=()=>toggleItem(el.dataset.toggle))
@@ -312,11 +382,17 @@ function bindEvents() {
   })
   document.querySelector('[data-action="reset"]')?.addEventListener('click',()=>{pushUndo('Before reset');state=clone(initialState);intakeDraft=null;brainDumpText='';save();messages.push({id:uid(),role:'assistant',text:'Prototype data restored.'});render()})
   document.querySelector('[data-action="undo"]')?.addEventListener('click',undoLast)
-  document.querySelector('[data-action="chat-toggle"]')?.addEventListener('click',()=>{chatOpen=!chatOpen;render()})
+  document.querySelector('[data-action="undo-history"]')?.addEventListener('click',undoLast)
+  document.querySelector('[data-action="export-backup"]')?.addEventListener('click',exportBackup)
+  document.querySelector('#import-backup')?.addEventListener('change',importBackup)
+  document.querySelector('[data-action="chat-toggle"]')?.addEventListener('click',()=>{stopVoice();chatOpen=!chatOpen;render()})
   document.querySelector('[data-action="plan-day"]')?.addEventListener('click',()=>runPlanner({label:`Replanned ${selectedDay}`,startDay:selectedDay}))
   document.querySelector('[data-action="plan-week"]')?.addEventListener('click',()=>runPlanner({label:'Replanned the week',startDay:'Monday'}))
   document.querySelector('[data-action="reality"]')?.addEventListener('click',runRealityMode)
   document.querySelector('[data-action="send"]')?.addEventListener('click',()=>sendMessage())
+  document.querySelectorAll('[data-voice]').forEach(el=>el.addEventListener('click',()=>toggleVoice(el.dataset.voice)))
+  document.querySelector('[data-action="read-aloud"]')?.addEventListener('click',()=>{readRepliesAloud=!readRepliesAloud;try{localStorage.setItem('daylight-read-replies',String(readRepliesAloud))}catch{};if(!readRepliesAloud)globalThis.speechSynthesis?.cancel();render()})
+  document.querySelector('#quick-add-form')?.addEventListener('submit',quickAddTask)
   document.querySelector('[data-action="sample-intake"]')?.addEventListener('click',()=>{brainDumpText=sampleBrainDump();render()})
   document.querySelector('[data-action="analyze-intake"]')?.addEventListener('click',analyzeIntake)
   document.querySelector('[data-action="apply-intake"]')?.addEventListener('click',applyIntakeDraft)
@@ -341,13 +417,15 @@ function editIntake(index,patch){
 }
 
 function pushUndo(label) {
-  undoStack.push({label,state:clone(state)})
+  undoStack.push({label,at:new Date().toISOString(),state:clone(state)})
   if(undoStack.length>HISTORY_LIMIT) undoStack.shift()
+  saveHistory()
 }
 function undoLast() {
   const previous=undoStack.pop()
   if(!previous)return
   state=previous.state
+  saveHistory()
   save()
   messages.push({id:uid(),role:'assistant',text:`Undid: ${previous.label}.`})
   render()
@@ -388,11 +466,11 @@ function plannerSummary(moved,split,unresolved) {
 
 function toggleItem(id) {
   const it=state.items.find(i=>i.id===id)
-  if(it){it.completed=!it.completed;save();render()}
+  if(it){pushUndo(`Checked ${it.title}`);it.completed=!it.completed;save();render()}
 }
 function toggleSubtask(itemId,subId) {
   const it=state.items.find(i=>i.id===itemId); const sub=it?.subtasks?.find(s=>s.id===subId)
-  if(sub){sub.completed=!sub.completed;it.completed=it.subtasks.every(s=>s.completed);save();render()}
+  if(sub){pushUndo(`Checked ${sub.title}`);sub.completed=!sub.completed;it.completed=it.subtasks.every(s=>s.completed);save();render()}
 }
 
 async function analyzeIntake(){
@@ -443,12 +521,101 @@ async function sendMessage(explicit='') {
   const text=(explicit || textarea?.value || '').trim(); if(!text||sending)return
   messages.push({id:uid(),role:'user',text}); sending=true; render()
   try {
-    const res=await fetch('/api/assistant',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message:text,selectedDay,now:new Date().toISOString(),state})})
-    if(!res.ok) throw new Error(await res.text())
-    const data=await res.json(); messages.push({id:uid(),role:'assistant',text:data.reply,proposals:data.proposals,questions:data.questions})
+    const history=messages.slice(-9,-1).filter(m=>m.id!=='hello'&&(m.role==='user'||(m.role==='assistant'&&!m.error))).map(m=>({role:m.role,text:m.text}))
+    const res=await fetch('/api/assistant',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message:text,history,selectedDay,now:new Date().toISOString(),state})})
+    if(!res.ok) throw await apiError(res)
+    const data=await res.json(); messages.push({id:uid(),role:'assistant',text:data.reply,proposals:data.proposals,questions:data.questions});speakReply(data.reply)
   } catch(err) {
-    messages.push({id:uid(),role:'assistant',text:'The AI connection is not configured here. Add ANTHROPIC_API_KEY in Netlify and conversational input will produce structured proposals. The deterministic planner itself works without the API.'})
+    messages.push({id:uid(),role:'assistant',text:connectionErrorMessage(err),error:true})
   } finally { sending=false; render() }
+}
+
+async function apiError(response) {
+  let data={}
+  try { data=await response.json() } catch { /* The server did not return JSON. */ }
+  return Object.assign(new Error(data.error||`Request failed (${response.status}).`),{status:response.status,code:data.code||''})
+}
+function connectionErrorMessage(error) {
+  if(error.code==='missing_key') return 'The AI key is missing from the Netlify Functions environment. Add ANTHROPIC_API_KEY there, then redeploy.'
+  if(error.code==='provider_auth') return 'The AI provider rejected the key. Check that the Anthropic key is active and belongs to the right account.'
+  if(error.code==='provider_balance') return 'The Anthropic account could not process this request because of its billing or usage status.'
+  if(error.code==='provider_model') return 'The selected Anthropic model is unavailable for this key. Check ANTHROPIC_MODEL in Netlify.'
+  if(error.code==='provider_request') return 'The AI provider rejected this request. Check the assistant Function log in Netlify for the error type.'
+  if(error.status===404) return 'The AI function could not be reached. Check the latest Netlify deploy and function routes.'
+  if(error.status===429) return 'The AI service is busy or has reached a rate limit. Please try again shortly.'
+  return 'I couldn’t reach the AI right now. Your planner still works; please try again shortly.'
+}
+function speakReply(text) {
+  if(!readRepliesAloud||!globalThis.speechSynthesis||!globalThis.SpeechSynthesisUtterance||!text)return
+  globalThis.speechSynthesis.cancel()
+  const utterance=new SpeechSynthesisUtterance(String(text).slice(0,900))
+  utterance.rate=1
+  globalThis.speechSynthesis.speak(utterance)
+}
+function stopVoice() {
+  if(!voiceSession)return
+  const session=voiceSession
+  voiceSession=null
+  voiceTarget=''
+  session.stop()
+  updateVoiceUI('')
+}
+function updateVoiceUI(status) {
+  document.querySelectorAll('[data-voice]').forEach(button=>{
+    const active=button.dataset.voice===voiceTarget
+    button.classList.toggle('listening',active)
+    button.setAttribute('aria-pressed',String(active))
+    button.setAttribute('aria-label',active?'Stop listening':button.dataset.voice==='chat'?'Speak to planner':'Speak brain dump')
+  })
+  document.querySelectorAll('[data-voice-status]').forEach(node=>{node.textContent=node.dataset.voiceStatus===voiceTarget?status:''})
+}
+function toggleVoice(target) {
+  if(voiceSession){stopVoice();return}
+  const Recognition=globalThis.SpeechRecognition||globalThis.webkitSpeechRecognition
+  const statusNode=document.querySelector(`[data-voice-status="${target}"]`)
+  if(!Recognition){if(statusNode)statusNode.textContent='Voice input is unavailable in this browser. You can still type here.';return}
+  const recognition=new Recognition()
+  recognition.lang=navigator.language||'en-US'
+  recognition.interimResults=true
+  recognition.continuous=false
+  voiceSession=recognition
+  voiceTarget=target
+  recognition.onresult=event=>{
+    let final='',interim=''
+    for(let i=event.resultIndex;i<event.results.length;i++){
+      const words=event.results[i][0]?.transcript||''
+      if(event.results[i].isFinal)final+=words
+      else interim+=words
+    }
+    if(final){
+      const input=document.querySelector(target==='chat'?'#chat-input':'#brain-dump-input')
+      if(input){input.value=`${input.value.trim()} ${final.trim()}`.trim();input.dispatchEvent(new Event('input',{bubbles:true}));if(target==='inbox')brainDumpText=input.value}
+    }
+    updateVoiceUI(interim?`Listening: ${interim}`:'Listening…')
+  }
+  recognition.onerror=event=>{
+    voiceSession=null;voiceTarget='';updateVoiceUI('')
+    if(statusNode)statusNode.textContent=event.error==='not-allowed'?'Microphone access was denied. Allow it in your browser to use voice.':'Voice input stopped. Please try again or type instead.'
+  }
+  recognition.onend=()=>{if(voiceSession===recognition){voiceSession=null;voiceTarget='';updateVoiceUI('')}}
+  try{recognition.start();updateVoiceUI('Listening…')}catch{voiceSession=null;voiceTarget='';updateVoiceUI('');if(statusNode)statusNode.textContent='Voice input could not start in this browser.'}
+}
+function quickAddTask(event) {
+  event.preventDefault()
+  const form=event.currentTarget
+  const title=String(form.elements.title.value||'').trim()
+  const durationMinutes=Number(form.elements.duration.value)
+  if(!title||!Number.isInteger(durationMinutes)||durationMinutes<1)return
+  pushUndo(`Added ${title}`)
+  state.items.push(task(uid(),title,selectedDay,'','',durationMinutes,{deadlineDay:selectedDay,priority:2,splittable:durationMinutes>=60}))
+  const result=selectedDay===detroitDay()
+    ? replanDayFromNow(state.items,selectedDay,detroitMinutes(),state.plannerConfig,{idFactory:uid})
+    : planWeek(state.items,state.plannerConfig,{startDay:selectedDay,idFactory:uid})
+  state.items=result.items
+  state.lastPlan={label:`Added ${title}`,changes:result.changes,unscheduled:result.unscheduled,at:'just now'}
+  save()
+  messages.push({id:uid(),role:'assistant',text:result.unscheduled.some(i=>i.title===title)?`I added ${title} to your planner, but it needs a slot. I kept your fixed commitments and protected free time intact.`:`I added ${title} and found a feasible slot on ${selectedDay}.`})
+  render()
 }
 
 function applyProposal(p) {
