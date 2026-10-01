@@ -440,3 +440,14 @@ The next build should replace local-only state with a durable backend foundation
 - migration path from local prototype data
 
 Alongside that foundation, goal decomposition should become the first higher-level intelligence feature: vague goal → milestones → concrete next action → scheduler. External calendar integrations should follow after the app has a reliable source of truth.
+
+### Checkpoint 4A — conversation and local recovery (implemented 2026-10-01)
+
+- Voice capture for chat and Inbox where browser speech recognition is available, with transcript review before sending.
+- Optional spoken responses.
+- Recent conversation context for follow-up questions.
+- Specific AI connection errors so setup failures can be diagnosed.
+- Quick task entry without AI, scheduled through the deterministic engine.
+- Persistent local undo history and manual JSON backup export/import.
+
+These changes do not complete Milestone 4. The next checkpoint is authentication and a Postgres-backed source of truth for planner items, Inbox captures, operations, and snapshots, followed by migration from local data. Provisioning the production database requires a Netlify credits decision.

@@ -1,0 +1,39 @@
+import assert from 'node:assert/strict'
+import assistant from './netlify/functions/assistant.mjs'
+
+const previousKey=process.env.ANTHROPIC_API_KEY
+const previousFetch=globalThis.fetch
+const request=body=>new Request('https://example.test/api/assistant',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})
+
+try {
+  delete process.env.ANTHROPIC_API_KEY
+  const missing=await assistant(request({message:'hello'}))
+  assert.equal(missing.status,503)
+  assert.equal((await missing.json()).code,'missing_key')
+
+  process.env.ANTHROPIC_API_KEY='test-only-key'
+  let sent
+  globalThis.fetch=async (_url,options)=>{
+    sent=JSON.parse(options.body)
+    return Response.json({content:[{type:'text',text:JSON.stringify({reply:'Sure, here is a plan.',proposals:[],questions:[]})}]})
+  }
+  const ok=await assistant(request({message:'What about tomorrow?',history:[{role:'assistant',text:'Initial greeting'},{role:'user',text:'Help me plan'},{role:'assistant',text:'Sure'}],state:{items:[]},selectedDay:'Thursday',now:'2026-10-01T14:00:00Z'}))
+  assert.equal(ok.status,200)
+  assert.equal((await ok.json()).reply,'Sure, here is a plan.')
+  assert.deepEqual(sent.messages,[{role:'user',content:'Help me plan'},{role:'assistant',content:'Sure'},{role:'user',content:'What about tomorrow?'}])
+
+  globalThis.fetch=async()=>Response.json({error:{type:'authentication_error'}},{status:401})
+  const badKey=await assistant(request({message:'hello',state:{items:[]}}))
+  assert.equal(badKey.status,502)
+  assert.equal((await badKey.json()).code,'provider_auth')
+
+  globalThis.fetch=async()=>Response.json({error:{type:'rate_limit_error'}},{status:429})
+  const limited=await assistant(request({message:'hello',state:{items:[]}}))
+  assert.equal(limited.status,429)
+  assert.equal((await limited.json()).code,'provider_rate_limit')
+  console.log('ASSISTANT_REGRESSION_TEST_PASS')
+} finally {
+  if(previousKey===undefined)delete process.env.ANTHROPIC_API_KEY
+  else process.env.ANTHROPIC_API_KEY=previousKey
+  globalThis.fetch=previousFetch
+}

@@ -1,6 +1,6 @@
 # Daylight — AI Daily Planner
 
-Milestone 3 prototype of a conversational daily planner designed for Netlify.
+Milestone 3 prototype with Checkpoint 4A conversation and local history improvements, designed for Netlify.
 
 ## What works now
 - Today timeline with fixed and flexible blocks
@@ -29,6 +29,10 @@ Milestone 3 prototype of a conversational daily planner designed for Netlify.
 - raw user wording retained in the Inbox capture history
 - accepted brain-dump items flow into the deterministic scheduler
 - offline heuristic intake fallback for local/static testing when the Anthropic endpoint is unavailable
+- voice capture for Planner and Inbox in supporting browsers, with optional spoken replies
+- Quick add task entry without AI, scheduled by the deterministic engine
+- conversational follow-up context and specific AI connection errors
+- persistent local undo history and manual JSON backup export/import
 
 ## Product architecture
 Claude interprets what the user means. It does not get final authority over time placement.
@@ -87,6 +91,13 @@ ANTHROPIC_MODEL=claude-sonnet-5-5
 ```
 
 The API key never appears in frontend code. Both `/api/assistant` and `/api/intake` call Anthropic only from Netlify Functions.
+If the provider rejects a request, Planner now shows the relevant error category instead of always saying the key is missing.
+
+## Voice and data
+
+Tap the microphone in Planner or Inbox to dictate. Review the transcript before sending it. Browser speech recognition may use the browser vendor's speech service; availability depends on the browser and microphone permission. Spoken replies are optional.
+
+History keeps the last 20 planner undo checkpoints on this device. Use **Download backup** to save a JSON copy of planner data, or **Import backup** to restore one. Keep backups private. This is not cross-device sync; accounts and Postgres remain the next major milestone.
 
 ## Deploy to Netlify
 1. Put this project in a Git repository and import it into Netlify.
@@ -115,3 +126,4 @@ npm test
 ```
 
 See `PHASE3_AUDIT.md` for the handoff audit and `MASTER_PLAN.md` for the roadmap.
+See `PHASE4A_AUDIT.md` for the current checkpoint audit and its remaining limits.
