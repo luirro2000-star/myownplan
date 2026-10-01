@@ -36,9 +36,23 @@ const responseSchema = {
 export default async (req) => {
   if (req.method !== 'POST') return Response.json({ error: 'Method not allowed' }, { status: 405 })
   const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) return Response.json({ error: 'ANTHROPIC_API_KEY is not configured.' }, { status: 500 })
+  if (!apiKey) return Response.json({ code: 'missing_key', error: 'The AI key is missing from the Functions environment.' }, { status: 503 })
 
-  const { message, state, selectedDay, now } = await req.json()
+  let input
+  try { input = await req.json() } catch { return Response.json({ code: 'invalid_request', error: 'Expected JSON.' }, { status: 400 }) }
+  const { message, state, selectedDay, now, history } = input || {}
+  if (!String(message || '').trim()) return Response.json({ code: 'invalid_request', error: 'Message is empty.' }, { status: 400 })
+  const conversation = []
+  for (const turn of Array.isArray(history) ? history.slice(-8) : []) {
+    if (!['user','assistant'].includes(turn?.role) || typeof turn.text !== 'string') continue
+    const content = turn.text.trim().slice(0,2000)
+    if (!content) continue
+    if (!conversation.length && turn.role === 'assistant') continue
+    if (conversation.at(-1)?.role === turn.role) conversation.at(-1).content += `\n${content}`
+    else conversation.push({ role: turn.role, content })
+  }
+  if (conversation.at(-1)?.role === 'user') conversation.at(-1).content += `\n${String(message).trim()}`
+  else conversation.push({ role: 'user', content: String(message).trim() })
   const system = `You are the interpretation layer for Daylight, a conversational daily planner.
 Understand messy human planning language and propose safe, concrete modifications to structured planning data.
 
@@ -61,7 +75,8 @@ Selected day: ${selectedDay}
 Current client time: ${now}
 Planner state: ${JSON.stringify(state)}`
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  let response
+  try { response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -72,15 +87,27 @@ Planner state: ${JSON.stringify(state)}`
       model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5',
       max_tokens: 1800,
       system,
-      messages: [{ role: 'user', content: message }],
+      messages: conversation,
       output_config: { effort: 'medium', format: { type: 'json_schema', schema: responseSchema } },
     }),
-  })
+  }) } catch {
+    return Response.json({ code: 'provider_unreachable', error: 'The AI provider could not be reached.' }, { status: 502 })
+  }
 
-  if (!response.ok) return Response.json({ error: 'Anthropic request failed', details: await response.text() }, { status: 502 })
-  const data = await response.json()
+  if (!response.ok) {
+    let providerError = {}
+    try { providerError = await response.json() } catch { /* Keep the status even if the provider response is not JSON. */ }
+    console.error('Anthropic request failed', response.status, providerError?.error?.type || 'unknown')
+    const code = response.status === 401 || response.status === 403 ? 'provider_auth'
+      : response.status === 402 ? 'provider_balance'
+      : response.status === 404 ? 'provider_model'
+      : response.status === 429 ? 'provider_rate_limit' : 'provider_request'
+    return Response.json({ code, error: 'The AI provider could not process the request.' }, { status: response.status === 429 ? 429 : 502 })
+  }
+  let data
+  try { data = await response.json() } catch { return Response.json({ code: 'provider_response', error: 'The AI provider returned unreadable data.' }, { status: 502 }) }
   const text = data.content?.find((block) => block.type === 'text')?.text
-  if (!text) return Response.json({ error: 'No structured response returned.' }, { status: 502 })
+  if (!text) return Response.json({ code: 'provider_response', error: 'No structured response returned.' }, { status: 502 })
   return new Response(text, { headers: { 'content-type': 'application/json' } })
 }
 
