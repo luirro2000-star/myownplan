@@ -1,3 +1,5 @@
+import { getUser } from '@netlify/identity'
+
 const responseSchema = {
   type: 'object',
   additionalProperties: false,
@@ -33,8 +35,9 @@ const responseSchema = {
   required: ['reply','proposals','questions'],
 }
 
-export default async (req) => {
+export async function handleAssistant(req, { currentUser = getUser } = {}) {
   if (req.method !== 'POST') return Response.json({ error: 'Method not allowed' }, { status: 405 })
+  if (!(await currentUser())?.id) return Response.json({ code: 'unauthorized', error: 'Sign in to use the AI planner.' }, { status: 401 })
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return Response.json({ code: 'missing_key', error: 'The AI key is missing from the Functions environment.' }, { status: 503 })
 
@@ -111,4 +114,5 @@ Planner state: ${JSON.stringify(state)}`
   return new Response(text, { headers: { 'content-type': 'application/json' } })
 }
 
+export default req => handleAssistant(req)
 export const config = { path: '/api/assistant' }
