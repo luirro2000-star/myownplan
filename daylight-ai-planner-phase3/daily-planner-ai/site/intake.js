@@ -5,10 +5,46 @@ export const INTAKE_TYPES = ['event','task','routine','rule','goal','metric','op
 export function normalizeIntakeAnalysis(input = {}) {
   const understood = Array.isArray(input.understood) ? input.understood : []
   const items = understood.map((entry, index) => normalizeEntry(entry, index)).filter(Boolean)
+  const seenIds = new Set()
+  items.forEach((item, index) => {
+    if (seenIds.has(item.reviewId)) item.reviewId = `review-${index + 1}`
+    while (seenIds.has(item.reviewId)) item.reviewId += '-copy'
+    seenIds.add(item.reviewId)
+  })
   return {
     summary: clean(input.summary) || `I found ${items.length} planning item${items.length === 1 ? '' : 's'}.`,
     items,
     questions: (Array.isArray(input.questions) ? input.questions : []).map(clean).filter(Boolean).slice(0, 8),
+  }
+}
+
+export function createIntakeCapture({ id, rawText, analysis, source, createdAt = new Date().toISOString() }) {
+  const review = normalizeIntakeAnalysis({
+    summary: analysis.summary,
+    understood: analysis.items,
+    questions: analysis.questions,
+  })
+  return {
+    id,
+    rawText,
+    summary: review.summary,
+    status: 'review',
+    source,
+    createdAt,
+    counts: review.items.reduce((counts, item) => ({ ...counts, [item.type]: (counts[item.type] || 0) + 1 }), {}),
+    appliedCount: 0,
+    review,
+  }
+}
+
+export function finishIntakeCapture(capture, appliedReviewIds) {
+  const applied = new Set(appliedReviewIds)
+  const remaining = capture.review.items.filter(item => !applied.has(item.reviewId))
+  return {
+    ...capture,
+    status: remaining.length ? 'needs_review' : 'applied',
+    appliedCount: (capture.appliedCount || 0) + capture.review.items.length - remaining.length,
+    review: remaining.length ? { ...capture.review, items: remaining, questions: remaining.map(item => item.question).filter(Boolean) } : null,
   }
 }
 

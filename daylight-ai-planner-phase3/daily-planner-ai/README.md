@@ -25,7 +25,8 @@ Milestone 4 planner with conversation, local recovery, and an invite-only cloud 
 - multi-object extraction into events, tasks, routines, rules, goals, metrics, and open loops
 - confidence-aware “Here’s what I understood” review before anything is applied
 - ambiguous intake items start unchecked rather than being silently guessed
-- editable intake type, title, day, time, and duration before application
+- editable intake type, title, day, time, duration, recurrence, due day, target, unit, and planning note before application
+- unfinished intake reviews saved in the Inbox and resumable after a refresh or sign-in
 - raw user wording retained in the Inbox capture history
 - accepted brain-dump items flow into the deterministic scheduler
 - offline heuristic intake fallback for local/static testing when the Anthropic endpoint is unavailable
@@ -70,6 +71,7 @@ Open **Inbox** and paste unstructured notes. The intake interpreter returns:
 - only material clarification questions
 
 Nothing is applied immediately. Daylight shows a review screen first. Low-confidence/ambiguous items are unchecked by default. Once accepted, calendar-like items enter the scheduling engine and non-calendar items are stored in the appropriate planning layer.
+Items left for later stay attached to their Inbox capture. You can reopen a review, correct an interpretation, and apply only the items you are ready to use.
 
 ## Local preview
 Install dependencies, then build the frontend and serve `dist`.
@@ -112,8 +114,8 @@ Netlify builds the Vite frontend to `dist` and deploys Functions from `netlify/f
 
 ## Deploy to Netlify
 1. Put this project in a Git repository and import it into Netlify.
-2. The included `netlify.toml` sets `site` as the publish directory and `netlify/functions` as the Functions directory.
-3. No frontend build command is required for this prototype.
+2. The included `netlify.toml` builds the Vite frontend and publishes `dist`, with Functions in `netlify/functions`.
+3. Keep changes in Deploy Previews during development; publish a production release when the checkpoint audits are complete.
 4. Add `ANTHROPIC_API_KEY` in Netlify environment variables with Functions access.
 5. Deploy.
 
@@ -123,7 +125,7 @@ Netlify builds the Vite frontend to `dist` and deploys Functions from `netlify/f
 - School events in the seed data reserve a 15-minute arrival buffer.
 - Deadlines are currently weekday-level rather than exact timestamps.
 - Reviewed recurring routines are materialized into weekday instances; a persistent recurrence-rule engine comes later.
-- The first Inbox stores capture history locally; cloud-backed long-term memory arrives with accounts/database work.
+- Current scheduling covers Monday–Friday; an exact-date calendar and recurrence-rule engine are later work.
 
 ## Tests included
 - `engine-smoke-test.mjs`
@@ -137,4 +139,4 @@ npm test
 ```
 
 See `PHASE3_AUDIT.md` for the handoff audit and `MASTER_PLAN.md` for the roadmap.
-See `PHASE4A_AUDIT.md` for the current checkpoint audit and its remaining limits.
+See `PHASE4C_AUDIT.md` for the current checkpoint audit and its remaining limits.
