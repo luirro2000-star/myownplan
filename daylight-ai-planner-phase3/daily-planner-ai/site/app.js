@@ -544,14 +544,14 @@ function bindEvents() {
   document.querySelectorAll('[data-intake-accept]').forEach(el=>el.onchange=()=>editIntake(Number(el.dataset.intakeAccept),{accepted:el.checked}))
   document.querySelectorAll('[data-intake-type]').forEach(el=>el.onchange=()=>editIntake(Number(el.dataset.intakeType),{type:el.value}))
   document.querySelectorAll('[data-intake-day]').forEach(el=>el.onchange=()=>editIntake(Number(el.dataset.intakeDay),{day:el.value}))
-  document.querySelectorAll('[data-intake-title]').forEach(el=>el.onchange=()=>editIntake(Number(el.dataset.intakeTitle),{title:el.value}))
-  document.querySelectorAll('[data-intake-start]').forEach(el=>el.onchange=()=>editIntake(Number(el.dataset.intakeStart),{start:el.value}))
-  document.querySelectorAll('[data-intake-duration]').forEach(el=>el.onchange=()=>editIntake(Number(el.dataset.intakeDuration),{durationMinutes:Number(el.value)||0}))
+  document.querySelectorAll('[data-intake-title]').forEach(el=>el.oninput=()=>editIntake(Number(el.dataset.intakeTitle),{title:el.value}))
+  document.querySelectorAll('[data-intake-start]').forEach(el=>el.oninput=()=>editIntake(Number(el.dataset.intakeStart),{start:el.value}))
+  document.querySelectorAll('[data-intake-duration]').forEach(el=>el.oninput=()=>editIntake(Number(el.dataset.intakeDuration),{durationMinutes:Number(el.value)||0}))
   document.querySelectorAll('[data-intake-recurrence]').forEach(el=>el.onchange=()=>editIntake(Number(el.dataset.intakeRecurrence),{recurrence:el.value}))
   document.querySelectorAll('[data-intake-deadline]').forEach(el=>el.onchange=()=>editIntake(Number(el.dataset.intakeDeadline),{deadlineDay:el.value}))
-  document.querySelectorAll('[data-intake-target]').forEach(el=>el.onchange=()=>editIntake(Number(el.dataset.intakeTarget),{target:Number(el.value)||0}))
-  document.querySelectorAll('[data-intake-unit]').forEach(el=>el.onchange=()=>editIntake(Number(el.dataset.intakeUnit),{unit:el.value}))
-  document.querySelectorAll('[data-intake-details]').forEach(el=>el.onchange=()=>editIntake(Number(el.dataset.intakeDetails),{details:el.value}))
+  document.querySelectorAll('[data-intake-target]').forEach(el=>el.oninput=()=>editIntake(Number(el.dataset.intakeTarget),{target:Number(el.value)||0}))
+  document.querySelectorAll('[data-intake-unit]').forEach(el=>el.oninput=()=>editIntake(Number(el.dataset.intakeUnit),{unit:el.value}))
+  document.querySelectorAll('[data-intake-details]').forEach(el=>el.oninput=()=>editIntake(Number(el.dataset.intakeDetails),{details:el.value}))
 }
 
 function editIntake(index,patch){
