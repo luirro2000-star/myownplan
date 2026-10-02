@@ -450,10 +450,13 @@ function inboxView() {
 }
 function intakeReview(){
   const accepted=intakeDraft.items.filter(i=>i.accepted).length
-  const ambiguous=intakeDraft.items.filter(i=>i.needsConfirmation).length
+  const unresolved=intakeDraft.items.filter(i=>i.needsConfirmation&&!i.accepted)
+  const ambiguous=unresolved.length
+  const pendingQuestions=[...new Set(unresolved.map(item=>item.question).filter(Boolean))]
+  if(!pendingQuestions.length&&ambiguous)pendingQuestions.push(...(intakeDraft.questions||[]))
   return `<section class="intake-review">
     <div class="review-summary"><div><div class="mini-label">HERE’S WHAT I UNDERSTOOD</div><h2>${esc(intakeDraft.summary)}</h2><p>${accepted} selected · ${ambiguous} need${ambiguous===1?'s':''} attention. Items left unchecked stay in Inbox for later.</p></div><div class="review-summary-actions"><button class="secondary-button" data-action="clear-intake">Keep for later</button><button class="reality-button" data-action="apply-intake" ${accepted?'':'disabled'}>Apply ${accepted} selected</button></div></div>
-    ${intakeDraft.questions?.length?`<div class="intake-questions"><strong>Questions that matter</strong>${intakeDraft.questions.map(q=>`<span>${esc(q)}</span>`).join('')}</div>`:''}
+    ${pendingQuestions.length?`<div class="intake-questions"><strong>Questions that matter</strong>${pendingQuestions.map(q=>`<span>${esc(q)}</span>`).join('')}</div>`:''}
     <div class="intake-grid">${intakeDraft.items.map((entry,index)=>intakeCard(entry,index)).join('')}</div>
   </section>`
 }
@@ -473,8 +476,7 @@ function intakeCard(entry,index){
     ${(entry.type==='goal'||entry.type==='metric')?`<div class="intake-time-row"><label>Target<input type="number" min="0" data-intake-target="${index}" value="${entry.target||''}" placeholder="Optional"></label><label>Unit<input data-intake-unit="${index}" value="${attr(entry.unit)}" placeholder="e.g. sessions"></label></div>`:''}
     <label class="intake-notes-label">Planning note<textarea data-intake-details="${index}" rows="2" placeholder="Add an answer or useful detail">${esc(entry.details)}</textarea></label>
     <div class="intake-meta"><span>${typeLabel(entry.type)}</span><span>${esc(entry.recurrence)}</span>${entry.deadlineDay?`<span>due ${esc(entry.deadlineDay)}</span>`:''}${entry.target?`<span>${entry.target} ${esc(entry.unit)}</span>`:''}</div>
-    ${entry.details?`<p>${esc(entry.details)}</p>`:''}
-    ${entry.needsConfirmation?`<div class="attention-box"><strong>Needs confirmation</strong><span>${esc(entry.question||'Check this interpretation before applying it.')}</span></div>`:''}
+    ${entry.needsConfirmation&&!entry.accepted?`<div class="attention-box"><strong>Needs confirmation</strong><span>${esc(entry.question||'Check this interpretation before applying it.')}</span></div>`:''}
   </article>`
 }
 function inboxHistoryCard(item){

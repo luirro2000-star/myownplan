@@ -19,10 +19,13 @@ Durable Inbox reviews, partial application, and correction controls. The live Ne
 - `npm test` passed engine, intake, assistant, and cloud-storage regressions. Intake tests now cover partial application, completion, serialization of an unresolved review, and duplicate review IDs.
 - `npm run build` produced the production Vite bundle successfully.
 - `git diff --check` found no whitespace errors.
+- The Netlify Deploy Preview built from the draft pull request with all reported checks passing. The live site stayed on checkpoint 4A.
+- In the preview, a synthetic brain dump produced one selected event and one unanswered open loop. Applying only the event left one Inbox review. After a full page reload, **Continue review** reopened that exact item without duplicating the event.
+- Correcting the remaining item to a goal and entering its target, unit, and planning note survived another full page reload. The preview test found that text fields originally saved only on blur; the fields now save as typed.
+- The review layout was inspected at desktop width. An injected script emitted a `MutationObserver` console error; Daylight source does not use `MutationObserver`, and no app interaction failed in this test.
 
 ## Remaining checks
 
-- Browser visual and interaction check on a Netlify Deploy Preview. The in-app browser blocked the local `127.0.0.1` preview, so local browser behavior is not yet verified.
 - Signed-in cross-device review recovery after the owner accepts the Netlify Identity invitation.
 - No production deployment until the planned release.
 
