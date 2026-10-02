@@ -224,7 +224,7 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
 .intake-questions span { font-size: 10.5px; color: #725f39; }
 .intake-grid { margin-top: 12px; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
 .intake-card { border: 1px solid #deded6; background: #fff; border-radius: 11px; padding: 14px; min-width: 0; transition: opacity .15s ease, border-color .15s ease, background .15s ease; }
-.intake-card.rejected { opacity: .5; background: #f7f7f3; }
+.intake-card.rejected { background: #f7f7f3; }
 .intake-card.ambiguous { border-color: #dcc38c; }
 .intake-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
 .accept-toggle { display: inline-flex; gap: 6px; align-items: center; font-size: 9px; text-transform: uppercase; letter-spacing: .07em; font-weight: 750; cursor: pointer; }
@@ -235,8 +235,10 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
 .intake-title { width: 100%; border: 0; border-bottom: 1px solid #e8e8e1; padding: 0 0 8px; background: transparent; outline: 0; font: 650 14px/1.2 inherit; color: #242420; }
 .intake-title:focus { border-color: #a8a89f; }
 .intake-fields, .intake-time-row { margin-top: 9px; display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-.intake-fields select, .intake-time-row input { width: 100%; border: 1px solid #e0e0d8; border-radius: 7px; background: #fafaf6; padding: 8px; font: 10px inherit; color: #55554f; outline: 0; }
-.intake-time-row label { font-size: 8.5px; color: #929288; display: grid; gap: 4px; text-transform: uppercase; letter-spacing: .05em; }
+.intake-fields select, .intake-time-row input, .intake-notes-label textarea { width: 100%; border: 1px solid #e0e0d8; border-radius: 7px; background: #fafaf6; padding: 8px; font: inherit; font-size: 10px; color: #55554f; outline: 0; }
+.intake-time-row label, .intake-fields label, .intake-notes-label { font-size: 8.5px; color: #929288; display: grid; gap: 4px; text-transform: uppercase; letter-spacing: .05em; }
+.intake-notes-label { margin-top: 9px; }
+.intake-notes-label textarea { resize: vertical; min-height: 46px; text-transform: none; letter-spacing: normal; }
 .intake-meta { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 9px; }
 .intake-meta span { font-size: 8.5px; color: #888880; border: 1px solid #e7e7e0; border-radius: 999px; padding: 3px 6px; }
 .intake-card > p { margin: 9px 0 0; font-size: 10px; line-height: 1.45; color: #73736c; }
@@ -250,6 +252,7 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
 .history-top span { color: #55554f; }
 .inbox-history-card h3 { margin: 4px 0; font-size: 12px; }
 .inbox-history-card p { margin: 0; max-width: 720px; font-size: 9.5px; line-height: 1.45; color: #8a8a81; }
+.inbox-history-card button { margin-top: 9px; }
 .history-counts { align-self: center; display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; max-width: 210px; }
 .history-counts span { font-size: 8.5px; background: #f1f1eb; border-radius: 999px; padding: 4px 7px; color: #72726a; }
 .metric-card { background: #f8f8f4; }

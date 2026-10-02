@@ -13,6 +13,8 @@ import {
   normalizeIntakeAnalysis,
   applyIntakeAnalysis,
   localIntakeFallback,
+  createIntakeCapture,
+  finishIntakeCapture,
 } from './intake.js'
 import { getUser, login, logout, handleAuthCallback, acceptInvite } from '@netlify/identity'
 
@@ -199,6 +201,7 @@ let readRepliesAloud = false
 try { readRepliesAloud = localStorage.getItem('daylight-read-replies') === 'true' } catch { /* Browser storage may be unavailable. */ }
 let brainDumpText = ''
 let intakeDraft = null
+let intakeCaptureId = null
 let messages = loadConversation()
 if(!messages.length)messages=[{ id:'hello', role:'assistant', text:"Tell me what changed, what you need to get done, or how you're feeling about the day. I’ll interpret it, then the planning engine will find feasible time." }]
 let accountUser = null
@@ -228,7 +231,7 @@ function render() {
 }
 
 function sidebar() {
-  const inboxPending = state.inbox.filter(i => i.status !== 'applied').length
+  const inboxPending = state.inbox.filter(i => i.review?.items?.length).length
   return `<aside class="sidebar">
     <div class="brand"><span class="brand-dot"></span>Daylight <span class="phase-pill">M4</span></div>
     <nav>
@@ -449,7 +452,7 @@ function intakeReview(){
   const accepted=intakeDraft.items.filter(i=>i.accepted).length
   const ambiguous=intakeDraft.items.filter(i=>i.needsConfirmation).length
   return `<section class="intake-review">
-    <div class="review-summary"><div><div class="mini-label">HERE’S WHAT I UNDERSTOOD</div><h2>${esc(intakeDraft.summary)}</h2><p>${accepted} selected · ${ambiguous} need${ambiguous===1?'s':''} attention. Ambiguous items start unchecked.</p></div><div class="review-summary-actions"><button class="secondary-button" data-action="clear-intake">Discard</button><button class="reality-button" data-action="apply-intake" ${accepted?'':'disabled'}>Apply ${accepted} selected</button></div></div>
+    <div class="review-summary"><div><div class="mini-label">HERE’S WHAT I UNDERSTOOD</div><h2>${esc(intakeDraft.summary)}</h2><p>${accepted} selected · ${ambiguous} need${ambiguous===1?'s':''} attention. Items left unchecked stay in Inbox for later.</p></div><div class="review-summary-actions"><button class="secondary-button" data-action="clear-intake">Keep for later</button><button class="reality-button" data-action="apply-intake" ${accepted?'':'disabled'}>Apply ${accepted} selected</button></div></div>
     ${intakeDraft.questions?.length?`<div class="intake-questions"><strong>Questions that matter</strong>${intakeDraft.questions.map(q=>`<span>${esc(q)}</span>`).join('')}</div>`:''}
     <div class="intake-grid">${intakeDraft.items.map((entry,index)=>intakeCard(entry,index)).join('')}</div>
   </section>`
@@ -458,12 +461,17 @@ function intakeCard(entry,index){
   const confidence=Math.round(entry.confidence*100)
   const typeOptions=INTAKE_TYPES.map(t=>`<option value="${t}" ${entry.type===t?'selected':''}>${typeLabel(t)}</option>`).join('')
   const dayOptions=['',...DAYS].map(d=>`<option value="${d}" ${entry.day===d?'selected':''}>${d||'No fixed day'}</option>`).join('')
+  const deadlineOptions=['',...DAYS].map(d=>`<option value="${d}" ${entry.deadlineDay===d?'selected':''}>${d||'No due day'}</option>`).join('')
+  const recurrenceOptions=['once','daily','weekdays','weekly','custom'].map(value=>`<option value="${value}" ${entry.recurrence===value?'selected':''}>${value==='once'?'One time':value[0].toUpperCase()+value.slice(1)}</option>`).join('')
   return `<article class="intake-card ${entry.accepted?'accepted':'rejected'} ${entry.needsConfirmation?'ambiguous':''}">
-    <div class="intake-card-top"><label class="accept-toggle"><input type="checkbox" data-intake-accept="${index}" ${entry.accepted?'checked':''}><span>${entry.accepted?'Use':'Skip'}</span></label><span class="confidence ${confidence<66?'low':''}">${confidence}% confidence</span></div>
+    <div class="intake-card-top"><label class="accept-toggle"><input type="checkbox" data-intake-accept="${index}" ${entry.accepted?'checked':''}><span>${entry.accepted?'Use':'Later'}</span></label><span class="confidence ${confidence<66?'low':''}">${confidence}% confidence</span></div>
     <div class="source-quote">“${esc(entry.sourceText||entry.title)}”</div>
     <input class="intake-title" data-intake-title="${index}" value="${attr(entry.title)}" aria-label="Interpreted title">
-    <div class="intake-fields"><select data-intake-type="${index}">${typeOptions}</select><select data-intake-day="${index}">${dayOptions}</select></div>
+    <div class="intake-fields"><select data-intake-type="${index}" aria-label="Item type">${typeOptions}</select><select data-intake-day="${index}" aria-label="Day">${dayOptions}</select></div>
+    <div class="intake-fields"><label>Repeat<select data-intake-recurrence="${index}">${recurrenceOptions}</select></label>${entry.type==='task'?`<label>Due day<select data-intake-deadline="${index}">${deadlineOptions}</select></label>`:'<span></span>'}</div>
     ${(entry.type==='event'||entry.type==='task'||entry.type==='routine')?`<div class="intake-time-row"><label>Start<input type="time" data-intake-start="${index}" value="${attr(entry.start)}"></label><label>Duration<input type="number" min="0" step="5" data-intake-duration="${index}" value="${entry.durationMinutes||''}" placeholder="min"></label></div>`:''}
+    ${(entry.type==='goal'||entry.type==='metric')?`<div class="intake-time-row"><label>Target<input type="number" min="0" data-intake-target="${index}" value="${entry.target||''}" placeholder="Optional"></label><label>Unit<input data-intake-unit="${index}" value="${attr(entry.unit)}" placeholder="e.g. sessions"></label></div>`:''}
+    <label class="intake-notes-label">Planning note<textarea data-intake-details="${index}" rows="2" placeholder="Add an answer or useful detail">${esc(entry.details)}</textarea></label>
     <div class="intake-meta"><span>${typeLabel(entry.type)}</span><span>${esc(entry.recurrence)}</span>${entry.deadlineDay?`<span>due ${esc(entry.deadlineDay)}</span>`:''}${entry.target?`<span>${entry.target} ${esc(entry.unit)}</span>`:''}</div>
     ${entry.details?`<p>${esc(entry.details)}</p>`:''}
     ${entry.needsConfirmation?`<div class="attention-box"><strong>Needs confirmation</strong><span>${esc(entry.question||'Check this interpretation before applying it.')}</span></div>`:''}
@@ -471,7 +479,8 @@ function intakeCard(entry,index){
 }
 function inboxHistoryCard(item){
   const counts=item.counts||{}
-  return `<article class="inbox-history-card"><div><div class="history-top"><span>${esc(item.status||'captured')}</span><time>${esc(item.createdLabel||'')}</time></div><h3>${esc(item.summary||'Brain dump')}</h3><p>${esc(shorten(item.rawText||'',180))}</p></div><div class="history-counts">${Object.entries(counts).map(([k,v])=>v?`<span>${esc(v)} ${esc(typeLabel(k))}${v===1?'':'s'}</span>`:'').join('')}</div></article>`
+  const remaining=item.review?.items?.length||0
+  return `<article class="inbox-history-card"><div><div class="history-top"><span>${remaining?`${remaining} to review`:esc(item.status||'captured')}</span><time>${esc(item.createdAt?new Date(item.createdAt).toLocaleString():item.createdLabel||'')}</time></div><h3>${esc(item.summary||'Brain dump')}</h3><p>${esc(shorten(item.rawText||'',180))}</p>${remaining?`<button class="secondary-button" data-resume-intake="${attr(item.id)}">Continue review</button>`:''}</div><div class="history-counts">${Object.entries(counts).map(([k,v])=>v?`<span>${esc(v)} ${esc(typeLabel(k))}${v===1?'':'s'}</span>`:'').join('')}</div></article>`
 }
 
 function assistantPanel() {
@@ -502,7 +511,7 @@ function bindEvents() {
   document.querySelectorAll('[data-apply]').forEach(el=>el.onclick=()=>{
     const [messageId,index]=el.dataset.apply.split(':'); const m=messages.find(m=>m.id===messageId); if(m?.proposals?.[Number(index)]) applyProposal(m.proposals[Number(index)])
   })
-  document.querySelector('[data-action="reset"]')?.addEventListener('click',()=>{pushUndo('Before reset');state=clone(initialState);intakeDraft=null;brainDumpText='';save();messages.push({id:uid(),role:'assistant',text:'Prototype data restored.'});render()})
+  document.querySelector('[data-action="reset"]')?.addEventListener('click',()=>{pushUndo('Before reset');state=clone(initialState);intakeDraft=null;intakeCaptureId=null;brainDumpText='';save();messages.push({id:uid(),role:'assistant',text:'Prototype data restored.'});render()})
   document.querySelector('[data-action="undo"]')?.addEventListener('click',undoLast)
   document.querySelector('[data-action="undo-history"]')?.addEventListener('click',undoLast)
   document.querySelector('[data-action="export-backup"]')?.addEventListener('click',exportBackup)
@@ -519,6 +528,14 @@ function bindEvents() {
   document.querySelector('[data-action="analyze-intake"]')?.addEventListener('click',analyzeIntake)
   document.querySelector('[data-action="apply-intake"]')?.addEventListener('click',applyIntakeDraft)
   document.querySelector('[data-action="clear-intake"]')?.addEventListener('click',()=>{intakeDraft=null;render()})
+  document.querySelectorAll('[data-resume-intake]').forEach(el=>el.addEventListener('click',()=>{
+    const capture=state.inbox.find(item=>item.id===el.dataset.resumeIntake)
+    if(!capture?.review?.items?.length)return
+    intakeCaptureId=capture.id
+    intakeDraft=clone(capture.review)
+    render()
+    document.querySelector('.intake-review')?.scrollIntoView({behavior:'smooth'})
+  }))
 
   const textarea=document.querySelector('#chat-input'); if(textarea) textarea.onkeydown=(e)=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}}
   const dump=document.querySelector('#brain-dump-input'); if(dump) dump.oninput=(e)=>{brainDumpText=e.target.value}
@@ -530,11 +547,18 @@ function bindEvents() {
   document.querySelectorAll('[data-intake-title]').forEach(el=>el.onchange=()=>editIntake(Number(el.dataset.intakeTitle),{title:el.value}))
   document.querySelectorAll('[data-intake-start]').forEach(el=>el.onchange=()=>editIntake(Number(el.dataset.intakeStart),{start:el.value}))
   document.querySelectorAll('[data-intake-duration]').forEach(el=>el.onchange=()=>editIntake(Number(el.dataset.intakeDuration),{durationMinutes:Number(el.value)||0}))
+  document.querySelectorAll('[data-intake-recurrence]').forEach(el=>el.onchange=()=>editIntake(Number(el.dataset.intakeRecurrence),{recurrence:el.value}))
+  document.querySelectorAll('[data-intake-deadline]').forEach(el=>el.onchange=()=>editIntake(Number(el.dataset.intakeDeadline),{deadlineDay:el.value}))
+  document.querySelectorAll('[data-intake-target]').forEach(el=>el.onchange=()=>editIntake(Number(el.dataset.intakeTarget),{target:Number(el.value)||0}))
+  document.querySelectorAll('[data-intake-unit]').forEach(el=>el.onchange=()=>editIntake(Number(el.dataset.intakeUnit),{unit:el.value}))
+  document.querySelectorAll('[data-intake-details]').forEach(el=>el.onchange=()=>editIntake(Number(el.dataset.intakeDetails),{details:el.value}))
 }
 
 function editIntake(index,patch){
   if(!intakeDraft?.items?.[index])return
   intakeDraft.items[index]={...intakeDraft.items[index],...patch}
+  const capture=state.inbox.find(item=>item.id===intakeCaptureId)
+  if(capture){capture.review=clone(intakeDraft);save()}
   if('accepted' in patch || 'type' in patch || 'day' in patch) render()
 }
 
@@ -611,8 +635,9 @@ async function analyzeIntake(){
   }finally{
     intakeSending=false
   }
-  const counts=countIntakeTypes(intakeDraft.items)
-  state.inbox.push({id:uid(),rawText:brainDumpText,summary:intakeDraft.summary,status:'review',source,counts,createdLabel:'just now'})
+  const capture=createIntakeCapture({id:uid(),rawText:brainDumpText,analysis:intakeDraft,source})
+  intakeCaptureId=capture.id
+  state.inbox.push(capture)
   save(); render()
 }
 
@@ -623,16 +648,17 @@ function applyIntakeDraft(){
   pushUndo('Brain dump import')
   const result=applyIntakeAnalysis(state,intakeDraft,{idFactory:uid})
   state=result.state
-  const latest=[...state.inbox].reverse().find(i=>i.status==='review')
-  if(latest){latest.status='applied';latest.appliedCount=result.applied.length}
+  const captureIndex=state.inbox.findIndex(item=>item.id===intakeCaptureId)
+  if(captureIndex>=0)state.inbox[captureIndex]=finishIntakeCapture(state.inbox[captureIndex],result.applied.map(item=>item.reviewId))
 
   const scheduler=planWeek(state.items,state.plannerConfig,{startDay:'Monday',idFactory:uid})
   state.items=scheduler.items
   state.lastPlan={label:'Planned accepted brain dump items',changes:scheduler.changes,unscheduled:scheduler.unscheduled,at:'just now'}
   save()
-  const ambiguity=intakeDraft.items.filter(i=>i.needsConfirmation&&!i.accepted).length
-  messages.push({id:uid(),role:'assistant',text:`I added ${result.applied.length} reviewed item${result.applied.length===1?'':'s'} to your planner and ran the scheduling engine. ${scheduler.unscheduled.length?scheduler.unscheduled.length+' flexible item'+(scheduler.unscheduled.length===1?'':'s')+' could not fit without breaking your constraints. ':''}${ambiguity?ambiguity+' ambiguous item'+(ambiguity===1?' is':'s are')+' still waiting in the review instead of being guessed.':''}`})
+  const remaining=state.inbox[captureIndex]?.review?.items?.length||0
+  messages.push({id:uid(),role:'assistant',text:`I added ${result.applied.length} reviewed item${result.applied.length===1?'':'s'} to your planner and ran the scheduling engine. ${scheduler.unscheduled.length?scheduler.unscheduled.length+' flexible item'+(scheduler.unscheduled.length===1?'':'s')+' could not fit without breaking your constraints. ':''}${remaining?remaining+' item'+(remaining===1?' is':'s are')+' saved in Inbox for later review.':''}`})
   intakeDraft=null
+  intakeCaptureId=null
   brainDumpText=''
   view='today'
   render()
@@ -790,7 +816,6 @@ function executeEngineAfterProposal(startDay,label) {
   messages.push({id:uid(),role:'assistant',text:result.unscheduled.length?`I added it, but the engine could not place ${result.unscheduled.length} item without breaking your constraints.`:'Added it and fit it into the schedule without moving fixed commitments.'})
 }
 
-function countIntakeTypes(items=[]){return items.reduce((acc,item)=>{acc[item.type]=(acc[item.type]||0)+1;return acc},{})}
 function typeLabel(value){return ({event:'event',task:'task',routine:'routine',rule:'rule',goal:'goal',metric:'metric',open_loop:'open loop'})[value]||value}
 function sampleBrainDump(){return `Monday\n8:30 - Matt\n7:15 - Motion 3D\n7:30hrs of school\n\nTuesday\n8:30 - Music class\n12:45 - Chad\n7:30hrs of school\n\nWednesday\n8:30 - Matt\n7:15 - Motion 3D\n7:30hrs of school\n\nThursday\n12:45 - Chad\n3:45hrs of school - 12:15hrs free\n\nMake my bed everyday.\nGet up as soon as I wake up.\nMake breakfast for me and my mom everyday.\nBrush my teeth. Apply minoxidil. Wash my face and apply cream. Make sure my hair is done, and my beard is clean.\n\nWake up at 7.\nGo to the gym at 8.\nLeave at around 9:30.\nMake sure I have all my homework done.\nBe positive for at least 15 minutes.\nWrite what I thought about.\nGo to school, arrive at least 15 min prior.\nTry to talk to friends, maybe make new ones.\nGet to at least 4000 points before leaving.\n\nFriday\nFree\n\nGo to the gym at least 3 times a week.\nAt least 45min of gym.\nDo homework 2 hours a day.\nIf I wake up at 7, I go to bed at 10:30 - 11:00.`}
 function dayItems(day){return state.items.filter(i=>i.day===day&&!i.archived).sort((a,b)=>(a.start||'99:99').localeCompare(b.start||'99:99'))}

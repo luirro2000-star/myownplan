@@ -461,3 +461,12 @@ These changes do not complete Milestone 4. The next checkpoint is authentication
 - AI endpoints require sign-in, protecting the server-side API key from anonymous use.
 
 Production deployment and owner account acceptance must be verified before marking this checkpoint complete. Subsequent work: server-side restoration of earlier snapshots, per-operation event history, persistent unresolved questions, then goal decomposition.
+
+### Checkpoint 4C — durable Inbox review (implemented locally 2026-10-02)
+
+- Each brain-dump capture now stores its review draft with the account-scoped planner state.
+- Unapplied items remain in Inbox after a partial import and can be reopened after a refresh or cloud sync.
+- Corrections to type, day, recurrence, due day, time, duration, goal target, unit, and planning notes are saved with the draft.
+- Review item IDs are made unique before partial application, so applying one item cannot accidentally remove another.
+
+The live site remains on checkpoint 4A to conserve production deploy credits. Checkpoint 4C needs a remote preview and account-backed test after the owner invitation is accepted. Next: goal decomposition, followed by snapshot restoration and operation history.
