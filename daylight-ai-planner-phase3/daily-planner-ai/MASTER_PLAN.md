@@ -521,3 +521,10 @@ Next: summarize recurring duration and skip patterns, then let the user explicit
 - A suggestion is visible on an unfinished flexible block. **Use** updates only that block and reruns deterministic planning; **Ignore this suggestion** suppresses the same suggestion until restored from History.
 - Accepted and ignored choices persist with local planner state, backups, and cloud sync. Undo applies to either choice.
 - No estimate changes automatically. Preferred-window learning and completion probability remain later work.
+
+### Checkpoint 5D — work patterns and time preferences (implemented locally 2026-10-03)
+
+- Recent attempts with the same title produce a simple finished/skipped count after at least three records. The display uses up to ten attempts and does not claim a reliable success probability.
+- Completed records retain their scheduled start time. Three or more matching completed blocks in the same broad time band may generate an optional preferred-window suggestion. Skips do not count as positive evidence for a window.
+- **Prefer morning/afternoon/evening** applies the window only to the chosen unfinished flexible block, then runs deterministic planning. **Ignore this suggestion** persists until **Show again** in History. Undo covers both actions.
+- Scheduled start time is not evidence of when work actually began. Calendar dates, recurrence, and stronger adaptive signals remain later work.

@@ -9,7 +9,7 @@ export function finishWork(state, itemId, { now = new Date().toISOString(), idFa
   item.completedAt = now
   item.actualMinutes = item.durationMinutes || 30
   next.workLog ||= []
-  next.workLog.push({ id: idFactory(), itemId, title: item.title, day: item.day, outcome: 'completed', estimatedMinutes: item.durationMinutes || 30, actualMinutes: item.actualMinutes, at: now })
+  next.workLog.push({ id: idFactory(), itemId, title: item.title, day: item.day, plannedStart: item.start || '', outcome: 'completed', estimatedMinutes: item.durationMinutes || 30, actualMinutes: item.actualMinutes, at: now })
   next.workLog = next.workLog.slice(-500)
   return next
 }
@@ -32,11 +32,12 @@ export function skipWork(state, itemId, { now = new Date().toISOString(), idFact
   if (!item || item.completed || item.skipped || item.flexible === false || item.locked) return next
   item.skipped = true
   item.skippedAt = now
+  const plannedStart = item.start || ''
   item.start = ''
   item.end = ''
   item.unscheduled = false
   next.workLog ||= []
-  next.workLog.push({ id: idFactory(), itemId, title: item.title, day: item.day, outcome: 'skipped', estimatedMinutes: item.durationMinutes || 30, at: now })
+  next.workLog.push({ id: idFactory(), itemId, title: item.title, day: item.day, plannedStart, outcome: 'skipped', estimatedMinutes: item.durationMinutes || 30, at: now })
   next.workLog = next.workLog.slice(-500)
   return next
 }

@@ -21,6 +21,7 @@ import { captureQuestions, resolveQuestion, describeOperation } from './planning
 import { DAY_MODES, MODE_LABELS, MODE_HINTS, modeForDay, configForDayModes } from './day-modes.js'
 import { finishWork, reopenWork, skipWork, resumeWork, setActualTime } from './work-signals.js'
 import { durationSuggestion } from './duration-learning.js'
+import { workPattern } from './work-patterns.js'
 import { getUser, login, logout, handleAuthCallback, acceptInvite } from '@netlify/identity'
 
 const STORAGE_KEY = 'daylight-planner-v03-static'
@@ -454,10 +455,12 @@ function timelineItem(it) {
   const feedback=!isFixed(it)?it.skipped?`<div class="work-feedback"><button data-resume-work="${attr(it.id)}">Bring back</button><span>Skipped for now. Replan when you’re ready.</span></div>`:it.completed?`<div class="work-feedback"><label>Actually took <select data-actual-time="${attr(it.id)}">${actualOptions}</select></label><span>Estimated ${formatMinutes(it.durationMinutes||30)}</span></div>`:`<div class="work-feedback"><button data-skip-work="${attr(it.id)}">Skip this block</button></div>`:''
   const suggestion=!isFixed(it)&&!it.completed&&!it.skipped?durationSuggestion(state.workLog,it.title,it.durationMinutes,state.learningChoices):null
   const suggestionUI=suggestion?`<div class="duration-suggestion"><span>Usually ${formatMinutes(suggestion.suggestedMinutes)} after ${suggestion.sampleCount} finishes. Estimated ${formatMinutes(it.durationMinutes)} now.</span><button data-use-duration="${attr(it.id)}">Use ${formatMinutes(suggestion.suggestedMinutes)}</button><button data-ignore-duration="${attr(it.id)}">Ignore this suggestion</button></div>`:''
+  const pattern=!isFixed(it)&&!it.completed&&!it.skipped?workPattern(state.workLog,it.title,state.learningChoices,it.preferredWindow):null
+  const patternUI=pattern?`<div class="work-pattern"><span>Finished ${pattern.completed} of ${pattern.attempts} recent ${esc(it.title)} attempts${pattern.skipped?` · skipped ${pattern.skipped}`:''}.</span>${pattern.preferred?`<span>${pattern.preferred.sampleCount} completed blocks were scheduled in the ${pattern.preferred.band}.</span><button data-use-window="${attr(it.id)}">Prefer ${pattern.preferred.band}</button><button data-ignore-window="${attr(it.id)}">Ignore this suggestion</button>`:''}</div>`:''
   return `<article class="timeline-item ${it.kind} ${it.completed?'done':''} ${it.skipped?'skipped':''} ${it.unscheduled?'unscheduled':''}">
     <div class="time-col"><span>${it.skipped?'Skipped':it.start?displayTime(it.start):'Unscheduled'}</span>${it.end?`<small>${displayTime(it.end)}</small>`:''}</div>
     <button class="check ${it.completed?'checked':''}" data-toggle="${attr(it.id)}" ${it.skipped?'disabled':''}>${it.completed?'✓':'○'}</button>
-    <div class="item-body"><div class="item-topline"><div><h3>${esc(it.title)}</h3><div class="item-meta">${meta.map(x=>`<span>${esc(x)}</span>`).join('')}${it.note?`<span class="needs-attention">${esc(it.note)}</span>`:''}</div></div></div>${subtasks}${feedback}${suggestionUI}</div>
+    <div class="item-body"><div class="item-topline"><div><h3>${esc(it.title)}</h3><div class="item-meta">${meta.map(x=>`<span>${esc(x)}</span>`).join('')}${it.note?`<span class="needs-attention">${esc(it.note)}</span>`:''}</div></div></div>${subtasks}${feedback}${suggestionUI}${patternUI}</div>
   </article>`
 }
 
@@ -492,7 +495,7 @@ function historyView() {
     <div class="backup-tools"><button class="secondary-button" data-action="export-backup">Download backup</button><label class="secondary-button" for="import-backup">Import backup</label><input id="import-backup" type="file" accept=".json,application/json" hidden><span>Backups include your personal planner notes. Keep the file private.</span></div>
     <section class="operation-history"><div class="mini-label">WHAT CHANGED</div>${state.operationLog?.length?`<div class="history-list">${state.operationLog.slice(-50).reverse().map(entry=>`<div class="history-entry"><div><strong>${esc(entry.label)}</strong><span>${esc(entry.summary||'Planner details updated')}</span><time>${esc(new Date(entry.at).toLocaleString())}</time></div></div>`).join('')}</div>`:'<div class="empty-state">No recorded changes yet.</div>'}</section>
     <section class="work-history"><div class="mini-label">WORK PATTERNS</div>${state.workLog?.length?`<div class="history-list">${state.workLog.slice(-20).reverse().map(entry=>`<div class="history-entry"><div><strong>${esc(entry.title)}</strong><span>${entry.outcome==='completed'?`Estimated ${formatMinutes(entry.estimatedMinutes)} · actually ${formatMinutes(entry.actualMinutes)}`:'Skipped'}</span><time>${esc(new Date(entry.at).toLocaleString())}</time></div></div>`).join('')}</div>`:'<div class="empty-state">Finish or skip flexible work to see patterns here.</div>'}</section>
-    ${state.learningChoices?.some(choice=>choice.status==='ignored')?`<section class="learning-history"><div class="mini-label">IGNORED SUGGESTIONS</div><div class="history-list">${state.learningChoices.map((choice,index)=>choice.status==='ignored'?`<div class="history-entry"><div><strong>${esc(choice.titleKey)}</strong><span>${formatMinutes(choice.suggestedMinutes)} duration suggestion</span></div><button class="secondary-button" data-reset-learning="${index}">Show again</button></div>`:'').join('')}</div></section>`:''}
+    ${state.learningChoices?.some(choice=>choice.status==='ignored')?`<section class="learning-history"><div class="mini-label">IGNORED SUGGESTIONS</div><div class="history-list">${state.learningChoices.map((choice,index)=>choice.status==='ignored'?`<div class="history-entry"><div><strong>${esc(choice.titleKey)}</strong><span>${choice.band?`${esc(choice.band)} time suggestion`:`${formatMinutes(choice.suggestedMinutes)} duration suggestion`}</span></div><button class="secondary-button" data-reset-learning="${index}">Show again</button></div>`:'').join('')}</div></section>`:''}
     <section class="undo-history"><div class="mini-label">UNDO POINTS</div>
     ${undoStack.length?`<div class="history-list">${undoStack.slice().reverse().map((entry,index)=>`<div class="history-entry"><div><strong>${esc(entry.label)}</strong><time>${esc(entry.at?new Date(entry.at).toLocaleString():'Earlier')}</time></div>${index===0?'<button class="secondary-button" data-action="undo-history">Undo this change</button>':''}</div>`).join('')}</div>`:'<div class="empty-state">No planner changes yet.</div>'}
     </section>
@@ -609,6 +612,8 @@ function bindEvents() {
   document.querySelectorAll('[data-actual-time]').forEach(el=>el.onchange=()=>updateActualTime(el.dataset.actualTime,Number(el.value)))
   document.querySelectorAll('[data-use-duration]').forEach(el=>el.onclick=()=>applyDurationSuggestion(el.dataset.useDuration))
   document.querySelectorAll('[data-ignore-duration]').forEach(el=>el.onclick=()=>ignoreDurationSuggestion(el.dataset.ignoreDuration))
+  document.querySelectorAll('[data-use-window]').forEach(el=>el.onclick=()=>applyWindowSuggestion(el.dataset.useWindow))
+  document.querySelectorAll('[data-ignore-window]').forEach(el=>el.onclick=()=>ignoreWindowSuggestion(el.dataset.ignoreWindow))
   document.querySelectorAll('[data-reset-learning]').forEach(el=>el.onclick=()=>resetIgnoredSuggestion(Number(el.dataset.resetLearning)))
   document.querySelectorAll('[data-subtask]').forEach(el=>el.onchange=()=>toggleSubtask(el.dataset.item,el.dataset.subtask))
   document.querySelectorAll('[data-apply]').forEach(el=>el.onclick=()=>{
@@ -876,9 +881,37 @@ function ignoreDurationSuggestion(id){
   state.learningChoices=state.learningChoices.slice(-100)
   save();render()
 }
+function currentWindowSuggestion(id){
+  const item=state.items.find(entry=>entry.id===id)
+  return item&&!item.completed&&!item.skipped&&!isFixed(item)?workPattern(state.workLog,item.title,state.learningChoices,item.preferredWindow)?.preferred:null
+}
+function applyWindowSuggestion(id){
+  const suggestion=currentWindowSuggestion(id)
+  const item=state.items.find(entry=>entry.id===id)
+  if(!suggestion||!item)return
+  pushUndo(`Preferred ${suggestion.band} for ${item.title}`)
+  item.preferredWindow={...suggestion.window}
+  item.start='';item.end=''
+  state.learningChoices.push({titleKey:suggestion.titleKey,band:suggestion.band,status:'accepted',at:new Date().toISOString()})
+  state.learningChoices=state.learningChoices.slice(-100)
+  const result=planWeek(state.items,planningConfig(),{startDay:item.day,idFactory:uid})
+  state.items=result.items
+  state.lastPlan={label:`Preferred ${suggestion.band} for ${item.title}`,changes:result.changes,unscheduled:result.unscheduled,at:'just now'}
+  save()
+  messages.push({id:uid(),role:'assistant',text:`I set ${item.title} to prefer ${suggestion.band} and replanned flexible work. ${result.unscheduled.length?`${result.unscheduled.length} item${result.unscheduled.length===1?' still needs':'s still need'} a slot.`:'Fixed commitments and protected free time stayed in place.'}`})
+  render()
+}
+function ignoreWindowSuggestion(id){
+  const suggestion=currentWindowSuggestion(id)
+  if(!suggestion)return
+  pushUndo('Ignored a time suggestion')
+  state.learningChoices.push({titleKey:suggestion.titleKey,band:suggestion.band,status:'ignored',at:new Date().toISOString()})
+  state.learningChoices=state.learningChoices.slice(-100)
+  save();render()
+}
 function resetIgnoredSuggestion(index){
   if(state.learningChoices?.[index]?.status!=='ignored')return
-  pushUndo('Show a duration suggestion again')
+  pushUndo('Show a suggestion again')
   state.learningChoices.splice(index,1)
   save();render()
 }

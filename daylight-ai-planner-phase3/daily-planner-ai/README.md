@@ -118,6 +118,8 @@ For flexible work, mark a block finished and choose how long it actually took fr
 
 After at least two completions with the same title, Daylight may suggest a typical duration based on the median of recent actual times. **Use** applies that estimate to the chosen block and replans; **Ignore this suggestion** hides that suggestion until you choose **Show again** in History. Suggestions never change estimates automatically.
 
+After at least three attempts with the same title, unfinished flexible blocks show how many recent attempts were finished or skipped. When at least three completed blocks were scheduled in one time of day, Daylight may suggest a matching preferred window. **Prefer morning/afternoon/evening** applies it only to the selected block and replans; **Ignore this suggestion** hides it until **Show again** in History. These are scheduling clues from past blocks, not proof of when you actually started or a prediction of success.
+
 In **Goals**, use **Find next step** to turn a goal or open loop into editable milestones and one small action. Signed-in users get an AI suggestion; offline users get a starter roadmap. **Save roadmap** keeps it for later, while **Save & plan next step** asks the scheduling engine to place the action. Editing a saved roadmap updates its linked planner task.
 
 ## Deployment
@@ -149,6 +151,7 @@ Netlify builds the Vite frontend to `dist` and deploys Functions from `netlify/f
 - `day-modes-regression-test.mjs`
 - `work-signals-regression-test.mjs`
 - `duration-learning-regression-test.mjs`
+- `work-patterns-regression-test.mjs`
 
 Run all tests with:
 
@@ -157,4 +160,4 @@ npm test
 ```
 
 See `PHASE3_AUDIT.md` for the handoff audit and `MASTER_PLAN.md` for the roadmap.
-See `PHASE5C_AUDIT.md` for the current checkpoint audit and its remaining limits.
+See `PHASE5D_AUDIT.md` for the current checkpoint audit and its remaining limits.
