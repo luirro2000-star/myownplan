@@ -528,3 +528,9 @@ Next: summarize recurring duration and skip patterns, then let the user explicit
 - Completed records retain their scheduled start time. Three or more matching completed blocks in the same broad time band may generate an optional preferred-window suggestion. Skips do not count as positive evidence for a window.
 - **Prefer morning/afternoon/evening** applies the window only to the chosen unfinished flexible block, then runs deterministic planning. **Ignore this suggestion** persists until **Show again** in History. Undo covers both actions.
 - Scheduled start time is not evidence of when work actually began. Calendar dates, recurrence, and stronger adaptive signals remain later work.
+
+### Checkpoint 9A — mobile readability and touch controls (implemented locally 2026-10-03)
+
+- On narrow screens, the account form starts in a compact Cloud sync disclosure so the day is closer to the top. Invitation acceptance and unresolved cloud choices still open the disclosure.
+- The phone layout increases tap areas and text sizes for navigation, weekday tabs, day modes, quick task entry, work actions, checkmarks, routine steps, and voice/chat controls.
+- Completed and skipped blocks use higher contrast. This is an early mobile pass; installability, offline behavior, device testing, and a full accessibility audit remain later work.

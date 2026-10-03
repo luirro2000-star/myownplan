@@ -244,6 +244,7 @@ let lastSyncedPayload = ''
 let cloudSnapshots = null
 let snapshotBusy = false
 let snapshotNotice = ''
+let accountPanelOpen = !window.matchMedia('(max-width: 900px)').matches
 
 const app = document.querySelector('#app')
 
@@ -271,7 +272,7 @@ function sidebar() {
       ${navButton('history','↶','History')}
     </nav>
     <div class="sidebar-spacer"></div>
-    ${accountControls()}
+    <details class="account-details" ${accountPanelOpen||inviteToken||cloudCopy?'open':''}><summary>${inviteToken?'Accept invitation':accountUser?'Account':'Cloud sync'}</summary>${accountControls()}</details>
     <div class="mini-label">Planning memory</div>
     <div class="rule-preview">${state.rules.length} rules · ${state.openLoops.length} open loops</div>
     <button class="ghost-button" data-action="undo" ${undoStack.length?'':'disabled'}><span class="icon">↶</span> Undo planner change</button>
@@ -596,6 +597,7 @@ function proposalCard(p,index,messageId) {
 }
 
 function bindEvents() {
+  document.querySelector('.account-details')?.addEventListener('toggle',event=>{accountPanelOpen=event.currentTarget.open})
   document.querySelector('#login-form')?.addEventListener('submit',signIn)
   document.querySelector('#invite-form')?.addEventListener('submit',acceptAccountInvite)
   document.querySelector('[data-action="sign-out"]')?.addEventListener('click',signOut)

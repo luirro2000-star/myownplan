@@ -38,8 +38,8 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
 .summary-stat span { font-size: 11px; color: #8b8b84; }
 .timeline { padding: 12px 46px 60px; }
 .timeline-item { display: grid; grid-template-columns: 76px 28px 1fr; gap: 10px; padding: 18px 0; border-bottom: 1px solid #ecece5; transition: opacity .18s ease; }
-.timeline-item.done { opacity: .46; }
-.timeline-item.skipped { opacity: .62; }
+.timeline-item.done { opacity: .72; }
+.timeline-item.skipped { opacity: .75; }
 .timeline-item .check:disabled { cursor: default; opacity: .4; }
 .work-feedback { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 9px; color: #8a8a81; font-size: 9.5px; }
 .work-feedback button { border: 1px solid #deded5; border-radius: 7px; padding: 5px 7px; background: #fff; color: #5c5c55; font: inherit; cursor: pointer; }
@@ -317,12 +317,17 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
 .account-box .account-quiet { background:transparent; color:#66665e; padding:4px; }
 .account-box .danger { color:#a54832; }
 .account-box small { font-size:9px; line-height:1.35; color:#a54832; }
+.account-details { min-width:0; }
+.account-details summary { display:flex; align-items:center; min-height:36px; border-radius:9px; background:#ecece5; padding:0 12px; font-size:12px; font-weight:650; cursor:pointer; }
+.account-details[open] summary { display:none; }
 .account-choice { display:grid; gap:5px; }
 @media (max-width: 1180px) {
   .intake-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 900px) {
   .sidebar { flex-wrap:wrap; }
+  .sidebar .account-details { flex:1 0 100%; }
+  .account-details[open] summary { display:flex; }
   .sidebar .account-box { flex:1 0 100%; margin:4px 0 0; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:center; }
   .sidebar .account-box strong,.sidebar .account-box p,.sidebar .account-box small,.sidebar .account-choice { grid-column:1/-1; }
   .review-summary { align-items: flex-start; flex-direction: column; }
@@ -343,4 +348,35 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
   .item-topline { flex-direction:column; gap:4px; }
   .intake-actions { flex-wrap:wrap; }
   .intake-action-group { flex-wrap:wrap; }
+  .sidebar .account-details { margin-top:8px; }
+  .account-details summary { min-height:44px; font-size:14px; }
+  .sidebar .account-box { margin-top:6px; }
+  .sidebar .account-box input,.sidebar .account-box button { min-height:44px; font-size:16px; }
+  .nav-item,.day-tab { min-height:44px; font-size:14px; }
+  .day-tabs { padding-bottom:10px; }
+  .topbar { padding-top:22px; }
+  .topbar h1 { font-size:32px; }
+  .date-line { font-size:13px; line-height:1.45; }
+  .top-actions > button,.day-mode-options button { min-height:44px; font-size:13px; }
+  .day-mode { align-items:stretch; }
+  .day-mode strong { font-size:14px; }
+  .day-mode span { font-size:12px; line-height:1.4; }
+  .day-mode-options button { flex:1 1 auto; }
+  .summary-stat { padding:12px; }
+  .summary-stat span { font-size:12px; }
+  .quick-add input,.quick-add select,.quick-add button { min-height:44px; font-size:16px; }
+  .quick-add button { flex:1 0 100%; }
+  .timeline-item { grid-template-columns:64px 40px minmax(0,1fr); gap:6px; padding:16px 0; }
+  .timeline-item .check { width:40px; height:40px; font-size:22px; }
+  .time-col { font-size:12px; }
+  .item-body h3 { font-size:16px; }
+  .item-meta,.work-feedback,.duration-suggestion,.work-pattern { font-size:12px; line-height:1.4; }
+  .work-feedback button,.work-feedback select,.duration-suggestion button,.work-pattern button { min-height:40px; font-size:12px; padding:8px 10px; }
+  .subtask { min-height:40px; font-size:14px; }
+  .subtask input { width:20px; height:20px; }
+  .composer textarea,.intake-composer textarea { font-size:16px; }
+  .composer > button { width:40px; height:40px; top:20px; right:20px; }
+  .composer > .voice-button { right:66px; }
+  .composer textarea { padding-right:108px; }
+  .composer-hint,.voice-status,.composer-tools button { font-size:12px; }
 }
