@@ -148,6 +148,13 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
 .goal-breakdown-fields textarea { resize: vertical; }
 .goal-breakdown-row { display: grid; grid-template-columns: minmax(100px,1fr) minmax(150px,2fr); gap: 10px; }
 .goal-breakdown-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; padding-top: 4px; }
+.day-mode { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin: 14px 46px 0; border: 1px solid #e0e0d7; border-radius: 10px; background: #f8f8f3; padding: 10px 12px; }
+.day-mode > div:first-child { display: grid; gap: 3px; }
+.day-mode strong { font-size: 10px; }
+.day-mode span { font-size: 9px; color: #818178; }
+.day-mode-options { display: flex; gap: 4px; flex-wrap: wrap; }
+.day-mode-options button { border: 1px solid #deded4; border-radius: 7px; background: #fff; padding: 7px 9px; font: inherit; font-size: 10px; cursor: pointer; }
+.day-mode-options button[aria-pressed="true"] { border-color: #252521; background: #252521; color: #fff; }
 .cloud-history { margin-top: 28px; border-top: 1px solid #e4e4dc; padding-top: 20px; }
 .cloud-history .section-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .cloud-history .section-head h2 { margin: 5px 0; font-size: 18px; }
@@ -160,6 +167,7 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
   .topbar, .view-pad { padding-left: 34px; padding-right: 34px; }
   .day-tabs, .timeline { padding-left: 34px; padding-right: 34px; }
   .day-summary { margin-left: 34px; margin-right: 34px; }
+  .day-mode { margin-left: 34px; margin-right: 34px; }
 }
 .icon { width: 17px; height: 17px; display: inline-grid; place-items: center; font-size: 14px; line-height: 1; }
 .button-row { display:flex; gap:7px; flex-wrap:wrap; }
@@ -186,6 +194,7 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
   .topbar,.view-pad { padding-left:20px; padding-right:20px; }
   .day-tabs,.timeline { padding-left:20px; padding-right:20px; }
   .day-summary { margin-left:20px; margin-right:20px; }
+  .day-mode { margin-left:20px; margin-right:20px; flex-wrap:wrap; }
 }
 
 /* Milestone 2 planner engine */

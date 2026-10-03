@@ -497,3 +497,11 @@ The draft preview carries this checkpoint while production remains on 4A. Signed
 - The operation log and question list follow the existing local backup and account-scoped cloud sync flows.
 
 Production remains on checkpoint 4A. The draft preview still needs signed-in question and sync checks after the owner account is available. Next: a release readiness pass across the full Milestone 4 feature set.
+
+### Checkpoint 5A — daily planning intensity (implemented locally 2026-10-02)
+
+- Today offers one-tap Minimum, Normal, and Ambitious modes per weekday.
+- Minimum reserves three additional hours, Normal one additional hour, and Ambitious uses the existing protected-free-time target. All modes preserve the user's configured free-time floor and leave fixed commitments anchored.
+- Choosing a mode replans flexible work through the deterministic scheduler, saves the choice in local/cloud planner state and backups, and creates an Undo point and operation record.
+
+This is the first Milestone 5 checkpoint. Actual-vs-estimated durations, skip patterns, learned preferences, and explicit controls for those assumptions remain future checkpoints.

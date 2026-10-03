@@ -30,5 +30,6 @@ export function describeOperation(before, after) {
     if (changed) parts.push(`${changed} ${name} updated`)
   }
   if (JSON.stringify(before?.plannerConfig) !== JSON.stringify(after?.plannerConfig)) parts.push('planning rules updated')
+  if (JSON.stringify(before?.dayModes) !== JSON.stringify(after?.dayModes)) parts.push('day mode updated')
   return parts.slice(0, 4).join(' · ') || 'Planner details updated'
 }

@@ -112,6 +112,8 @@ Signed-in users can also open **History → Earlier cloud versions** to restore 
 
 The Inbox keeps unanswered review questions alongside the capture that raised them. Questions raised by Planner also stay in Inbox after a reload; use **Answer** to reply by typing or speaking, or **Dismiss** if the question is no longer useful. History shows a concise record of planner operations as well as Undo points.
 
+On **Today**, choose **Minimum**, **Normal**, or **Ambitious** to replan that weekday with more or less breathing room. Minimum protects three extra hours, Normal one extra hour, and Ambitious uses the configured free-time floor. All modes keep fixed commitments anchored and preserve at least the configured free time. The choice is saved with the plan and can be undone.
+
 In **Goals**, use **Find next step** to turn a goal or open loop into editable milestones and one small action. Signed-in users get an AI suggestion; offline users get a starter roadmap. **Save roadmap** keeps it for later, while **Save & plan next step** asks the scheduling engine to place the action. Editing a saved roadmap updates its linked planner task.
 
 ## Deployment
@@ -140,6 +142,7 @@ Netlify builds the Vite frontend to `dist` and deploys Functions from `netlify/f
 - `goal-breakdown-regression-test.mjs`
 - `planner-snapshots-regression-test.mjs`
 - `planning-memory-regression-test.mjs`
+- `day-modes-regression-test.mjs`
 
 Run all tests with:
 
@@ -148,4 +151,4 @@ npm test
 ```
 
 See `PHASE3_AUDIT.md` for the handoff audit and `MASTER_PLAN.md` for the roadmap.
-See `PHASE4F_AUDIT.md` for the current checkpoint audit and its remaining limits.
+See `PHASE5A_AUDIT.md` for the current checkpoint audit and its remaining limits.

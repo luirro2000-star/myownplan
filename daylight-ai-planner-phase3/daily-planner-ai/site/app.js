@@ -18,6 +18,7 @@ import {
 } from './intake.js'
 import { normalizeGoalBreakdown, starterGoalBreakdown } from './goal-breakdown.js'
 import { captureQuestions, resolveQuestion, describeOperation } from './planning-memory.js'
+import { DAY_MODES, MODE_LABELS, MODE_HINTS, modeForDay, configForDayModes } from './day-modes.js'
 import { getUser, login, logout, handleAuthCallback, acceptInvite } from '@netlify/identity'
 
 const STORAGE_KEY = 'daylight-planner-v03-static'
@@ -40,6 +41,7 @@ const morningSteps = () => [
 const initialState = {
   version: 3,
   plannerConfig: clone(DEFAULT_PLANNER_CONFIG),
+  dayModes: {},
   items: [
     fixed('mon-matt','Matt','Monday','08:30','10:00',{ bufferBefore:15, locationType:'school' }),
     fixed('mon-motion','Motion 3D','Monday','19:15','21:45',{ bufferBefore:15, locationType:'school', note:'7:15 interpreted as PM — confirm if needed.' }),
@@ -100,6 +102,7 @@ function migrate(saved) {
   const next = clone(saved)
   next.version = 3
   next.plannerConfig ||= clone(DEFAULT_PLANNER_CONFIG)
+  next.dayModes ||= {}
   next.items ||= []
   next.goals ||= []
   next.rules ||= []
@@ -395,10 +398,11 @@ async function restoreCloudSnapshot(revision) {
   finally {snapshotBusy=false;render()}
 }
 function navButton(id, icon, label) { return `<button class="nav-item ${view===id?'active':''}" data-view="${id}"><span class="icon">${icon}</span>${label}</button>` }
+function planningConfig() { return configForDayModes(state.plannerConfig,state.dayModes) }
 
 function todayView() {
   const items = dayItems(selectedDay)
-  const metrics = dayMetrics(state.items, selectedDay, state.plannerConfig)
+  const metrics = dayMetrics(state.items, selectedDay, planningConfig())
   const conflicts = detectConflicts(state.items, selectedDay)
   const done = items.filter(i => i.completed).length
   const unscheduled = state.items.filter(i => i.day===selectedDay && i.unscheduled && !i.completed)
@@ -407,6 +411,7 @@ function todayView() {
       <div class="top-actions"><button class="secondary-button" data-action="plan-day"><span class="icon">↳</span> Replan</button><button class="reality-button" data-action="reality"><span class="icon">✦</span> Reality mode</button></div>
     </header>
     <div class="day-tabs">${DAYS.map(d=>`<button class="day-tab ${d===selectedDay?'active':''}" data-day="${d}">${d.slice(0,3)}</button>`).join('')}</div>
+    <div class="day-mode"><div><strong>How much should today hold?</strong><span>${esc(MODE_HINTS[modeForDay(state.dayModes,selectedDay)])}</span></div><div class="day-mode-options">${DAY_MODES.map(mode=>`<button type="button" data-day-mode="${mode}" aria-pressed="${modeForDay(state.dayModes,selectedDay)===mode}">${MODE_LABELS[mode]}</button>`).join('')}</div></div>
     <section class="day-summary">
       ${summary(`${done}/${items.length}`,'blocks done')}
       ${summary(formatMinutes(metrics.fixedMinutes),'fixed + buffers')}
@@ -444,7 +449,7 @@ function timelineItem(it) {
 }
 
 function weekView() {
-  const diagnostics=weekDiagnostics(state.items,state.plannerConfig)
+  const diagnostics=weekDiagnostics(state.items,planningConfig())
   return `<div class="view-pad"><div class="page-head"><div><div class="eyebrow">WEEK AT A GLANCE</div><h1>This week</h1><p class="page-intro">The engine protects fixed commitments and keeps a minimum amount of the day intentionally open.</p></div><button class="reality-button" data-action="plan-week"><span class="icon">✦</span> Plan week</button></div>
     <div class="week-grid">${DAYS.map(day => {
       const items=dayItems(day); const m=diagnostics.byDay[day]
@@ -581,6 +586,7 @@ function bindEvents() {
   document.querySelector('[data-action="use-local"]')?.addEventListener('click',()=>{if(cloudCopy?.exists&&!confirm('Replace the cloud plan with this device’s plan? The previous cloud plan will be replaced.'))return;saveToCloud(true).then(()=>render())})
   document.querySelectorAll('[data-view]').forEach(el=>el.onclick=()=>{stopVoice();view=el.dataset.view;render()})
   document.querySelectorAll('[data-day]').forEach(el=>el.onclick=()=>{selectedDay=el.dataset.day;render()})
+  document.querySelectorAll('[data-day-mode]').forEach(el=>el.onclick=()=>setDayMode(el.dataset.dayMode))
   document.querySelectorAll('[data-open-day]').forEach(el=>el.onclick=()=>{selectedDay=el.dataset.openDay;view='today';render()})
   document.querySelectorAll('[data-toggle]').forEach(el=>el.onclick=()=>toggleItem(el.dataset.toggle))
   document.querySelectorAll('[data-subtask]').forEach(el=>el.onchange=()=>toggleSubtask(el.dataset.item,el.dataset.subtask))
@@ -721,7 +727,7 @@ function saveGoalBreakdown(schedule){
   }
   if(planDay){
     const day=planDay
-    const result=day===detroitDay()?replanDayFromNow(state.items,day,detroitMinutes(),state.plannerConfig,{idFactory:uid}):planWeek(state.items,state.plannerConfig,{startDay:day,idFactory:uid})
+    const result=day===detroitDay()?replanDayFromNow(state.items,day,detroitMinutes(),planningConfig(),{idFactory:uid}):planWeek(state.items,planningConfig(),{startDay:day,idFactory:uid})
     state.items=result.items
     state.lastPlan={label:`Next step for ${target.title}`,changes:result.changes,unscheduled:result.unscheduled,at:'just now'}
   }
@@ -753,7 +759,7 @@ function undoLast() {
 
 function runPlanner({label,startDay}) {
   pushUndo(label)
-  const result=planWeek(state.items,state.plannerConfig,{startDay,idFactory:uid})
+  const result=planWeek(state.items,planningConfig(),{startDay,idFactory:uid})
   state.items=result.items
   state.lastPlan={label,changes:result.changes,unscheduled:result.unscheduled,at:'just now'}
   save()
@@ -763,11 +769,25 @@ function runPlanner({label,startDay}) {
   messages.push({id:uid(),role:'assistant',text:plannerSummary(moved,split,unresolved)})
   render()
 }
+function setDayMode(mode) {
+  if(!DAY_MODES.includes(mode)||modeForDay(state.dayModes,selectedDay)===mode)return
+  pushUndo(`${MODE_LABELS[mode]} day on ${selectedDay}`)
+  state.dayModes[selectedDay]=mode
+  const config=planningConfig()
+  const result=selectedDay===detroitDay()
+    ? replanDayFromNow(state.items,selectedDay,detroitMinutes(),config,{idFactory:uid})
+    : planWeek(state.items,config,{startDay:selectedDay,idFactory:uid})
+  state.items=result.items
+  state.lastPlan={label:`${MODE_LABELS[mode]} day on ${selectedDay}`,changes:result.changes,unscheduled:result.unscheduled,at:'just now'}
+  save()
+  messages.push({id:uid(),role:'assistant',text:`${MODE_LABELS[mode]} day is on for ${selectedDay}. ${MODE_HINTS[mode]} ${result.unscheduled.length?`${result.unscheduled.length} flexible item${result.unscheduled.length===1?' needs':'s need'} another slot.`:'Fixed commitments and protected free time remain in place.'}`})
+  render()
+}
 function runRealityMode() {
   const nowDay=detroitDay()
   const now=selectedDay===nowDay?detroitMinutes():(toMinutes(state.plannerConfig.dayStart)||420)
   pushUndo(`Reality mode on ${selectedDay}`)
-  const result=replanDayFromNow(state.items,selectedDay,now,state.plannerConfig,{idFactory:uid})
+  const result=replanDayFromNow(state.items,selectedDay,now,planningConfig(),{idFactory:uid})
   state.items=result.items
   state.lastPlan={label:`Reality mode · ${selectedDay}`,changes:result.changes,unscheduled:result.unscheduled,at:selectedDay===nowDay?`from ${displayTime(minutesToTime(now))}`:'from the start of the day'}
   save()
@@ -826,7 +846,7 @@ function applyIntakeDraft(){
   const captureIndex=state.inbox.findIndex(item=>item.id===intakeCaptureId)
   if(captureIndex>=0)state.inbox[captureIndex]=finishIntakeCapture(state.inbox[captureIndex],result.applied.map(item=>item.reviewId))
 
-  const scheduler=planWeek(state.items,state.plannerConfig,{startDay:'Monday',idFactory:uid})
+  const scheduler=planWeek(state.items,planningConfig(),{startDay:'Monday',idFactory:uid})
   state.items=scheduler.items
   state.lastPlan={label:'Planned accepted brain dump items',changes:scheduler.changes,unscheduled:scheduler.unscheduled,at:'just now'}
   save()
@@ -940,8 +960,8 @@ function quickAddTask(event) {
   pushUndo(`Added ${title}`)
   state.items.push(task(uid(),title,selectedDay,'','',durationMinutes,{deadlineDay:selectedDay,priority:2,splittable:durationMinutes>=60}))
   const result=selectedDay===detroitDay()
-    ? replanDayFromNow(state.items,selectedDay,detroitMinutes(),state.plannerConfig,{idFactory:uid})
-    : planWeek(state.items,state.plannerConfig,{startDay:selectedDay,idFactory:uid})
+    ? replanDayFromNow(state.items,selectedDay,detroitMinutes(),planningConfig(),{idFactory:uid})
+    : planWeek(state.items,planningConfig(),{startDay:selectedDay,idFactory:uid})
   state.items=result.items
   state.lastPlan={label:`Added ${title}`,changes:result.changes,unscheduled:result.unscheduled,at:'just now'}
   save()
@@ -993,7 +1013,7 @@ function applyProposal(p) {
   render()
 }
 function executeEngineAfterProposal(startDay,label) {
-  const result=planWeek(state.items,state.plannerConfig,{startDay,idFactory:uid})
+  const result=planWeek(state.items,planningConfig(),{startDay,idFactory:uid})
   state.items=result.items
   state.lastPlan={label,changes:result.changes,unscheduled:result.unscheduled,at:'just now'}
   messages.push({id:uid(),role:'assistant',text:result.unscheduled.length?`I added it, but the engine could not place ${result.unscheduled.length} item without breaking your constraints.`:'Added it and fit it into the schedule without moving fixed commitments.'})
