@@ -126,6 +126,23 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
 .progress-track { height: 5px; background: #edede7; border-radius: 999px; overflow: hidden; }
 .progress-fill { height: 100%; background: #20201c; border-radius: inherit; }
 .open-loop { background: #f0eee6; }
+.goal-next-button { margin-top: 14px; }
+.roadmap-summary { margin-top: 15px; border-top: 1px solid #e7e7df; padding-top: 13px; font-size: 10px; line-height: 1.5; color: #55554e; }
+.roadmap-summary > strong { color: #292924; }
+.roadmap-summary ol { padding-left: 19px; margin: 7px 0; }
+.roadmap-summary li { margin: 3px 0; }
+.roadmap-summary p { margin: 6px 0; color: #4d4d47; }
+.roadmap-status { display: inline-block; margin-top: 5px; border-radius: 999px; background: #e7ece2; color: #49603d; padding: 4px 8px; font-size: 9px; }
+.goal-breakdown-review { margin-top: 24px; border: 1px solid #deded6; background: #fff; border-radius: 13px; padding: 14px; }
+.goal-breakdown-review .review-summary { border: 0; padding: 4px 4px 15px; background: transparent; }
+.goal-breakdown-loading { padding: 20px 4px; font-size: 12px; color: #77776f; }
+.goal-breakdown-fields { display: grid; gap: 11px; padding: 14px; border-radius: 10px; background: #fafaf6; }
+.goal-breakdown-fields > p { margin: 0 0 4px; font-size: 11px; color: #66665e; line-height: 1.5; }
+.goal-breakdown-fields label { display: grid; gap: 5px; min-width: 0; font-size: 9px; color: #77776d; text-transform: uppercase; letter-spacing: .05em; }
+.goal-breakdown-fields input, .goal-breakdown-fields select, .goal-breakdown-fields textarea { width: 100%; border: 1px solid #deded5; border-radius: 7px; background: #fff; color: #292925; padding: 9px 10px; font: inherit; font-size: 11px; line-height: 1.4; text-transform: none; letter-spacing: normal; }
+.goal-breakdown-fields textarea { resize: vertical; }
+.goal-breakdown-row { display: grid; grid-template-columns: minmax(100px,1fr) minmax(150px,2fr); gap: 10px; }
+.goal-breakdown-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; padding-top: 4px; }
 @media (max-width: 1280px) {
   .quick-add { margin-left: 34px; margin-right: 34px; }
   body { min-width: 1020px; }

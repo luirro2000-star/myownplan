@@ -469,4 +469,13 @@ Production deployment and owner account acceptance must be verified before marki
 - Corrections to type, day, recurrence, due day, time, duration, goal target, unit, and planning notes are saved with the draft.
 - Review item IDs are made unique before partial application, so applying one item cannot accidentally remove another.
 
-The live site remains on checkpoint 4A to conserve production deploy credits. Checkpoint 4C needs a remote preview and account-backed test after the owner invitation is accepted. Next: goal decomposition, followed by snapshot restoration and operation history.
+The live site remains on checkpoint 4A to conserve production deploy credits. Checkpoint 4C passed remote unsigned preview testing; account-backed recovery awaits the owner account. Next: goal decomposition, followed by snapshot restoration and operation history.
+
+### Checkpoint 4D — goal decomposition (implemented locally 2026-10-02)
+
+- Goals and open loops can become editable roadmaps with two to four milestones and one small next action.
+- Signed-in users can request an AI suggestion through a server-side, account-protected Function. Without sign-in or when AI is unavailable, an editable starter roadmap remains available.
+- Saving a roadmap does not change the schedule. **Save & plan next step** passes the action to the deterministic planner, which protects fixed commitments and free time. Editing a linked action updates its planner task.
+- Roadmaps live with their goal or open loop in local storage, backups, and account-scoped cloud state.
+
+The draft pull request and Deploy Preview carry this checkpoint while production remains on 4A. Remote unsigned flow and signed-in AI/sync verification are separate audit checks. Next: restore earlier server snapshots from History, then add per-operation history.

@@ -16,6 +16,7 @@ import {
   createIntakeCapture,
   finishIntakeCapture,
 } from './intake.js'
+import { normalizeGoalBreakdown, starterGoalBreakdown } from './goal-breakdown.js'
 import { getUser, login, logout, handleAuthCallback, acceptInvite } from '@netlify/identity'
 
 const STORAGE_KEY = 'daylight-planner-v03-static'
@@ -202,6 +203,7 @@ try { readRepliesAloud = localStorage.getItem('daylight-read-replies') === 'true
 let brainDumpText = ''
 let intakeDraft = null
 let intakeCaptureId = null
+let goalDraft = null
 let messages = loadConversation()
 if(!messages.length)messages=[{ id:'hello', role:'assistant', text:"Tell me what changed, what you need to get done, or how you're feeling about the day. I’ll interpret it, then the planning engine will find feasible time." }]
 let accountUser = null
@@ -415,6 +417,7 @@ function planReport(report) {
 
 function goalsView() {
   return `<div class="view-pad"><div class="eyebrow">GOALS, METRICS & OPEN LOOPS</div><h1>What the week is for</h1><p class="page-intro">Goals stay separate from the calendar until they produce a concrete next action. Open loops keep important intentions visible without pretending they already have a schedule.</p>
+  ${goalDraft?goalBreakdownReview():''}
   <div class="goal-grid">${state.goals.map(goalCard).join('')}${state.metrics.map(metricCard).join('')}${state.openLoops.map(openLoopCard).join('')}</div></div>`
 }
 function historyView() {
@@ -425,14 +428,28 @@ function historyView() {
 }
 function goalCard(g){
   const pct=g.target?Math.min(100,Math.round((g.progress/g.target)*100)):0
-  return `<article class="goal-card"><div class="goal-top"><span>${esc(g.cadence||'Ongoing')}</span><strong>${g.target?`${g.progress}/${g.target}`:''}</strong></div><h2>${esc(g.title)}</h2><div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div><p>${esc(g.unit||'')}${g.minimumDurationMinutes?` · minimum ${g.minimumDurationMinutes}m each`:''}${g.note?` · ${esc(g.note)}`:''}</p>${g.id==='points'?`<div class="score-input"><input data-goal-progress="points" type="range" min="0" max="4000" step="100" value="${g.progress}"></div>`:''}</article>`
+  return `<article class="goal-card"><div class="goal-top"><span>${esc(g.cadence||'Ongoing')}</span><strong>${g.target?`${g.progress}/${g.target}`:''}</strong></div><h2>${esc(g.title)}</h2><div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div><p>${esc(g.unit||'')}${g.minimumDurationMinutes?` · minimum ${g.minimumDurationMinutes}m each`:''}${g.note?` · ${esc(g.note)}`:''}</p>${g.id==='points'?`<div class="score-input"><input data-goal-progress="points" type="range" min="0" max="4000" step="100" value="${g.progress}"></div>`:''}${roadmapContent(g.roadmap)}<button class="secondary-button goal-next-button" data-goal-breakdown="goal:${attr(g.id)}">${g.roadmap?'Revise next step':'Find next step'}</button></article>`
 }
 function metricCard(m){
   const pct=m.target?Math.min(100,Math.round((m.progress/m.target)*100)):0
   return `<article class="goal-card metric-card"><div class="goal-top"><span>Metric · ${esc(m.cadence||'Daily')}</span><strong>${m.progress}/${m.target}</strong></div><h2>${esc(m.title)}</h2><div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div><p>${esc(m.unit||'units')}${m.details?` · ${esc(m.details)}`:''}</p></article>`
 }
 function openLoopCard(loop){
-  return `<article class="goal-card open-loop"><div class="goal-top"><span>Open loop</span><strong>${esc(loop.status||'open')}</strong></div><h2>${esc(loop.title)}</h2><p>${esc(loop.details||loop.sourceText||'Still needs a concrete next action.')}</p></article>`
+  return `<article class="goal-card open-loop"><div class="goal-top"><span>Open loop</span><strong>${esc(loop.status||'open')}</strong></div><h2>${esc(loop.title)}</h2><p>${esc(loop.details||loop.sourceText||'Still needs a concrete next action.')}</p>${roadmapContent(loop.roadmap)}<button class="secondary-button goal-next-button" data-goal-breakdown="open_loop:${attr(loop.id)}">${loop.roadmap?'Revise next step':'Find next step'}</button></article>`
+}
+
+function roadmapContent(roadmap){
+  if(!roadmap)return ''
+  const planned=roadmap.scheduledTaskId&&state.items.find(item=>item.id===roadmap.scheduledTaskId)
+  return `<div class="roadmap-summary"><strong>Path forward</strong><ol>${(roadmap.milestones||[]).map(title=>`<li>${esc(title)}</li>`).join('')}</ol><p>Next: ${esc(roadmap.nextAction?.title||'Choose a next action')}</p>${planned?`<span class="roadmap-status">${planned.unscheduled?'Next step needs a slot':'Next step is in your plan'}</span>`:''}</div>`
+}
+
+function goalBreakdownReview(){
+  const data=goalDraft.data
+  const days=['',...DAYS].map(day=>`<option value="${day}" ${data.nextAction.day===day?'selected':''}>${day||'Let Daylight choose'}</option>`).join('')
+  return `<section class="goal-breakdown-review"><div class="review-summary"><div><div class="mini-label">A SMALL PATH FORWARD</div><h2>${esc(goalDraft.title)}</h2><p>${esc(goalDraft.notice||'Edit anything before saving. Nothing goes on the calendar until you choose it.')}</p></div><button class="secondary-button" data-action="cancel-goal-breakdown">Close</button></div>
+    ${goalDraft.loading?'<p class="goal-breakdown-loading">Finding a next step…</p>':`<div class="goal-breakdown-fields"><p>${esc(data.summary)}</p><div class="mini-label">MILESTONES</div>${data.milestones.map((title,index)=>`<label>Step ${index+1}<input data-goal-milestone="${index}" value="${attr(title)}"></label>`).join('')}<div class="mini-label">NEXT ACTION</div><label>What to do<input data-goal-action-title value="${attr(data.nextAction.title)}"></label><div class="goal-breakdown-row"><label>Minutes<input type="number" min="10" max="180" data-goal-action-duration value="${data.nextAction.durationMinutes}"></label><label>Day<select data-goal-action-day>${days}</select></label></div><label>Useful detail<textarea data-goal-action-details rows="2">${esc(data.nextAction.details)}</textarea></label><div class="goal-breakdown-actions"><button class="secondary-button" data-action="save-goal-breakdown">Save roadmap</button><button class="reality-button" data-action="schedule-goal-breakdown">Save & plan next step</button></div></div>`}
+  </section>`
 }
 
 function inboxView() {
@@ -513,7 +530,7 @@ function bindEvents() {
   document.querySelectorAll('[data-apply]').forEach(el=>el.onclick=()=>{
     const [messageId,index]=el.dataset.apply.split(':'); const m=messages.find(m=>m.id===messageId); if(m?.proposals?.[Number(index)]) applyProposal(m.proposals[Number(index)])
   })
-  document.querySelector('[data-action="reset"]')?.addEventListener('click',()=>{pushUndo('Before reset');state=clone(initialState);intakeDraft=null;intakeCaptureId=null;brainDumpText='';save();messages.push({id:uid(),role:'assistant',text:'Prototype data restored.'});render()})
+  document.querySelector('[data-action="reset"]')?.addEventListener('click',()=>{pushUndo('Before reset');state=clone(initialState);intakeDraft=null;intakeCaptureId=null;goalDraft=null;brainDumpText='';save();messages.push({id:uid(),role:'assistant',text:'Prototype data restored.'});render()})
   document.querySelector('[data-action="undo"]')?.addEventListener('click',undoLast)
   document.querySelector('[data-action="undo-history"]')?.addEventListener('click',undoLast)
   document.querySelector('[data-action="export-backup"]')?.addEventListener('click',exportBackup)
@@ -542,6 +559,18 @@ function bindEvents() {
   const textarea=document.querySelector('#chat-input'); if(textarea) textarea.onkeydown=(e)=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}}
   const dump=document.querySelector('#brain-dump-input'); if(dump) dump.oninput=(e)=>{brainDumpText=e.target.value}
   document.querySelector('[data-goal-progress="points"]')?.addEventListener('input',(e)=>{const goal=state.goals.find(g=>g.id==='points'); if(goal){goal.progress=Number(e.target.value);save();render()}})
+  document.querySelectorAll('[data-goal-breakdown]').forEach(el=>el.addEventListener('click',()=>{
+    const [kind,id]=el.dataset.goalBreakdown.split(':')
+    suggestGoalBreakdown(kind,id)
+  }))
+  document.querySelector('[data-action="cancel-goal-breakdown"]')?.addEventListener('click',()=>{goalDraft=null;render()})
+  document.querySelector('[data-action="save-goal-breakdown"]')?.addEventListener('click',()=>saveGoalBreakdown(false))
+  document.querySelector('[data-action="schedule-goal-breakdown"]')?.addEventListener('click',()=>saveGoalBreakdown(true))
+  document.querySelectorAll('[data-goal-milestone]').forEach(el=>el.oninput=()=>{if(goalDraft)goalDraft.data.milestones[Number(el.dataset.goalMilestone)]=el.value})
+  document.querySelector('[data-goal-action-title]')?.addEventListener('input',e=>{if(goalDraft)goalDraft.data.nextAction.title=e.target.value})
+  document.querySelector('[data-goal-action-duration]')?.addEventListener('input',e=>{if(goalDraft)goalDraft.data.nextAction.durationMinutes=Number(e.target.value)})
+  document.querySelector('[data-goal-action-day]')?.addEventListener('change',e=>{if(goalDraft)goalDraft.data.nextAction.day=e.target.value})
+  document.querySelector('[data-goal-action-details]')?.addEventListener('input',e=>{if(goalDraft)goalDraft.data.nextAction.details=e.target.value})
 
   document.querySelectorAll('[data-intake-accept]').forEach(el=>el.onchange=()=>editIntake(Number(el.dataset.intakeAccept),{accepted:el.checked}))
   document.querySelectorAll('[data-intake-type]').forEach(el=>el.onchange=()=>editIntake(Number(el.dataset.intakeType),{type:el.value}))
@@ -562,6 +591,83 @@ function editIntake(index,patch){
   const capture=state.inbox.find(item=>item.id===intakeCaptureId)
   if(capture){capture.review=clone(intakeDraft);save()}
   if('accepted' in patch || 'type' in patch || 'day' in patch) render()
+}
+
+function goalTarget(kind,id){
+  return (kind==='goal'?state.goals:kind==='open_loop'?state.openLoops:[]).find(item=>item.id===id)
+}
+
+async function suggestGoalBreakdown(kind,id){
+  const target=goalTarget(kind,id)
+  if(!target)return
+  if(target.roadmap){
+    goalDraft={kind,id,title:target.title,data:normalizeGoalBreakdown(target.roadmap,target.title),loading:false,notice:'Edit your saved roadmap, or place its next step in the plan.'}
+    render()
+    document.querySelector('.goal-breakdown-review')?.scrollIntoView({behavior:'smooth'})
+    return
+  }
+  const details=target.note||target.details||target.sourceText||''
+  goalDraft={kind,id,title:target.title,data:starterGoalBreakdown(target.title),loading:!!accountUser,notice:accountUser?'':'Sign in for a tailored AI suggestion. This starter roadmap is editable and works offline.'}
+  render()
+  if(!accountUser)return
+  try {
+    const response=await fetch('/api/goal-breakdown',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({kind,title:target.title,details})})
+    if(!response.ok)throw await apiError(response)
+    if(goalDraft?.id===id&&goalDraft.kind===kind){goalDraft.data=normalizeGoalBreakdown(await response.json(),target.title);goalDraft.notice='Review these suggestions. Saving a roadmap does not schedule anything.'}
+  } catch {
+    if(goalDraft?.id===id&&goalDraft.kind===kind)goalDraft.notice='AI suggestions are unavailable right now. Edit this starter roadmap and continue.'
+  } finally {
+    if(goalDraft?.id===id&&goalDraft.kind===kind){goalDraft.loading=false;render();document.querySelector('.goal-breakdown-review')?.scrollIntoView({behavior:'smooth'})}
+  }
+}
+
+function saveGoalBreakdown(schedule){
+  if(!goalDraft||goalDraft.loading)return
+  const target=goalTarget(goalDraft.kind,goalDraft.id)
+  if(!target)return
+  const data=normalizeGoalBreakdown(goalDraft.data,target.title)
+  if(!data.nextAction.title.trim())return
+  pushUndo(`Roadmap for ${target.title}`)
+  const priorTaskId=target.roadmap?.scheduledTaskId
+  const linkedTask=priorTaskId&&state.items.find(item=>item.id===priorTaskId)
+  const scheduledTaskId=linkedTask?.id||null
+  target.roadmap={...data,scheduledTaskId}
+  if(goalDraft.kind==='open_loop')target.status='in progress'
+  let scheduled=false
+  let planDay=null
+  let action=linkedTask
+  if(linkedTask){
+    const nextDay=data.nextAction.day||linkedTask.day
+    const changed=linkedTask.title!==data.nextAction.title||linkedTask.durationMinutes!==data.nextAction.durationMinutes||linkedTask.note!==data.nextAction.details||linkedTask.day!==nextDay
+    if(changed){
+      linkedTask.title=data.nextAction.title
+      linkedTask.durationMinutes=data.nextAction.durationMinutes
+      linkedTask.note=data.nextAction.details
+      linkedTask.day=nextDay
+      linkedTask.deadlineDay=nextDay
+      linkedTask.start=''
+      linkedTask.end=''
+      planDay=nextDay
+    }
+  } else if(schedule){
+    const day=data.nextAction.day||selectedDay
+    action=task(uid(),data.nextAction.title,day,'','',data.nextAction.durationMinutes,{deadlineDay:day,priority:2,goalId:target.id,note:data.nextAction.details})
+    state.items.push(action)
+    planDay=day
+    target.roadmap.scheduledTaskId=action.id
+    scheduled=true
+  }
+  if(planDay){
+    const day=planDay
+    const result=day===detroitDay()?replanDayFromNow(state.items,day,detroitMinutes(),state.plannerConfig,{idFactory:uid}):planWeek(state.items,state.plannerConfig,{startDay:day,idFactory:uid})
+    state.items=result.items
+    state.lastPlan={label:`Next step for ${target.title}`,changes:result.changes,unscheduled:result.unscheduled,at:'just now'}
+  }
+  save()
+  const added=target.roadmap.scheduledTaskId&&state.items.find(item=>item.id===target.roadmap.scheduledTaskId)
+  messages.push({id:uid(),role:'assistant',text:scheduled?`I saved a path for ${target.title}. ${added?.unscheduled?'Its first step needs a free slot; I kept your fixed commitments and protected free time in place.':'Its first step is in your plan.'}`:scheduledTaskId?`I saved the updated path for ${target.title}. ${added?.unscheduled?'Its first step still needs a free slot.':'Its first step is in your plan.'}`:`I saved a path for ${target.title}. You can choose when to place the next step in your plan.`})
+  goalDraft=null
+  render()
 }
 
 function pushUndo(label) {
