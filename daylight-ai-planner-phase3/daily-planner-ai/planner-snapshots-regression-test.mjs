@@ -13,7 +13,7 @@ const database = () => ({
   sql: async (_strings, userId) => snapshots.filter(row => row.userId === userId).sort((a, b) => b.revision - a.revision).map(({ revision, label, created_at }) => ({ revision, label, created_at })),
   pool: { connect: async () => ({
     query: async (sql, params = []) => {
-      if (sql.startsWith('SELECT revision FROM daylight_planners')) return { rows: rows.has(params[0]) ? [{ revision: rows.get(params[0]).revision }] : [] }
+      if (sql.startsWith('SELECT revision, planner FROM daylight_planners')) return { rows: rows.has(params[0]) ? [{ revision: rows.get(params[0]).revision, planner: rows.get(params[0]).planner }] : [] }
       if (sql.startsWith('SELECT planner FROM daylight_snapshots')) return { rows: snapshots.filter(row => row.userId === params[0] && row.revision === params[1]).map(row => ({ planner: row.planner })) }
       if (sql.startsWith('UPDATE daylight_planners')) rows.set(params[0], { revision: params[1], planner: JSON.parse(params[2]), history: JSON.parse(params[3]) })
       if (sql.startsWith('INSERT INTO daylight_snapshots')) snapshots.push({ userId: params[0], revision: params[1], planner: JSON.parse(params[2]), label: params[3] })
@@ -35,7 +35,8 @@ const history = [{ label: 'Before restore', at: '2026-10-02T13:00:00Z', state: c
 const restored = await handlePlannerSnapshots(request('POST', { revision: 1, expectedRevision: 3, history }), config)
 assert.equal(restored.status, 200)
 assert.equal((await restored.json()).revision, 4)
-assert.deepEqual(rows.get('owner').planner, oldPlan)
+assert.deepEqual(rows.get('owner').planner.goals, oldPlan.goals)
+assert.equal(rows.get('owner').planner.operationLog.at(-1).label, 'Restored version 1')
 assert.deepEqual(rows.get('owner').history, history)
 assert.equal(snapshots.find(row => row.userId === 'owner' && row.revision === 4).label, 'Restored version 1')
 console.log('PLANNER_SNAPSHOTS_REGRESSION_TEST_PASS')

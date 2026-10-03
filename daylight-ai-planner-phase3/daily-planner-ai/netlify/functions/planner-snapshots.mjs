@@ -34,7 +34,7 @@ export async function handlePlannerSnapshots(req, { currentUser = getUser, datab
   try {
     await client.query('BEGIN')
     await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [user.id])
-    const current = await client.query('SELECT revision FROM daylight_planners WHERE user_id = $1 FOR UPDATE', [user.id])
+    const current = await client.query('SELECT revision, planner FROM daylight_planners WHERE user_id = $1 FOR UPDATE', [user.id])
     if (!current.rows.length) {
       await client.query('ROLLBACK')
       return json({ code: 'missing_plan' }, 404)
@@ -49,9 +49,11 @@ export async function handlePlannerSnapshots(req, { currentUser = getUser, datab
       await client.query('ROLLBACK')
       return json({ code: 'missing_snapshot' }, 404)
     }
-    const planner = found.rows[0].planner
-    const nextRevision = currentRevision + 1
     const label = `Restored version ${input.revision}`
+    const planner = { ...found.rows[0].planner, operationLog: [...(current.rows[0].planner?.operationLog || []), {
+      id: crypto.randomUUID(), label, at: new Date().toISOString(), summary: 'Earlier cloud planner version restored',
+    }].slice(-100) }
+    const nextRevision = currentRevision + 1
     await client.query(`UPDATE daylight_planners SET revision = $2, planner = $3::jsonb, undo_history = $4::jsonb, updated_at = now() WHERE user_id = $1`,
       [user.id, nextRevision, JSON.stringify(planner), JSON.stringify(input.history)])
     await client.query('INSERT INTO daylight_snapshots (user_id, revision, planner, label) VALUES ($1, $2, $3::jsonb, $4)',
