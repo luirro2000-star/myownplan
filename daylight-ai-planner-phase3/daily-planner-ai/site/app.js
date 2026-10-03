@@ -415,7 +415,7 @@ function todayView() {
     <section class="day-summary">
       ${summary(`${done}/${items.length}`,'blocks done')}
       ${summary(formatMinutes(metrics.fixedMinutes),'fixed + buffers')}
-      ${summary(formatMinutes(metrics.openMinutes),'open now')}
+      ${summary(formatMinutes(metrics.openMinutes),'open in day')}
       ${summary(formatMinutes(metrics.protectedFreeMinutes),'protected free')}
     </section>
     ${plannerNotice(metrics, conflicts, unscheduled)}
@@ -774,9 +774,7 @@ function setDayMode(mode) {
   pushUndo(`${MODE_LABELS[mode]} day on ${selectedDay}`)
   state.dayModes[selectedDay]=mode
   const config=planningConfig()
-  const result=selectedDay===detroitDay()
-    ? replanDayFromNow(state.items,selectedDay,detroitMinutes(),config,{idFactory:uid})
-    : planWeek(state.items,config,{startDay:selectedDay,idFactory:uid})
+  const result=planWeek(state.items,config,{startDay:selectedDay,idFactory:uid})
   state.items=result.items
   state.lastPlan={label:`${MODE_LABELS[mode]} day on ${selectedDay}`,changes:result.changes,unscheduled:result.unscheduled,at:'just now'}
   save()
