@@ -97,8 +97,8 @@ export function dayMetrics(items, day, config = DEFAULT_PLANNER_CONFIG) {
   const dayItems = items.filter(i => i.day === day && !i.archived)
   const bounds = dayBounds(config, day)
   const fixedMinutes = mergeIntervals(dayItems.filter(isAnchored).map(effectiveInterval)).reduce((sum, i) => sum + Math.max(0, i.end - i.start), 0)
-  const flexibleMinutes = dayItems.filter(i => !isAnchored(i) && !i.completed).reduce((sum, i) => sum + itemDuration(i), 0)
-  const allBusy = mergeIntervals(dayItems.filter(i => i.start && i.end && !i.completed).map(effectiveInterval)).reduce((sum, i) => sum + Math.max(0, i.end - i.start), 0)
+  const flexibleMinutes = dayItems.filter(i => !isAnchored(i) && !i.completed && !i.skipped).reduce((sum, i) => sum + itemDuration(i), 0)
+  const allBusy = mergeIntervals(dayItems.filter(i => i.start && i.end && !i.completed && !i.skipped).map(effectiveInterval)).reduce((sum, i) => sum + Math.max(0, i.end - i.start), 0)
   const total = Math.max(0, bounds.end - bounds.start)
   const openMinutes = Math.max(0, total - allBusy)
   const schedulableMinutes = Math.max(0, total - fixedMinutes - bounds.protectedFree)
@@ -114,7 +114,7 @@ export function dayMetrics(items, day, config = DEFAULT_PLANNER_CONFIG) {
 }
 
 export function detectConflicts(items, day) {
-  const dayItems = items.filter(i => i.day === day && i.start && i.end && !i.archived)
+  const dayItems = items.filter(i => i.day === day && i.start && i.end && !i.archived && !i.skipped)
     .map(item => ({ item, interval: effectiveInterval(item) }))
     .filter(x => x.interval)
     .sort((a, b) => a.interval.start - b.interval.start)
@@ -259,7 +259,7 @@ export function planWeek(inputItems, config = DEFAULT_PLANNER_CONFIG, options = 
 
   const startIndex = Math.max(0, DAYS.indexOf(startDay))
   const movable = items
-    .filter(i => !i.archived && !i.completed && !isAnchored(i) && itemDuration(i) > 0 && DAYS.indexOf(i.day) >= startIndex)
+    .filter(i => !i.archived && !i.completed && !i.skipped && !isAnchored(i) && itemDuration(i) > 0 && DAYS.indexOf(i.day) >= startIndex)
     .sort((a, b) => priorityScore(b) - priorityScore(a))
 
   // Remove movable blocks from the time grid before calculating placements.

@@ -1,3 +1,5 @@
+import { getUser, verifyRequestOrigin } from '@netlify/identity'
+
 const responseSchema = {
   type: 'object',
   additionalProperties: false,
@@ -33,15 +35,22 @@ const responseSchema = {
   required: ['reply','proposals','questions'],
 }
 
-export default async (req) => {
+export async function handleAssistant(req, { currentUser = getUser, checkOrigin = verifyRequestOrigin } = {}) {
   if (req.method !== 'POST') return Response.json({ error: 'Method not allowed' }, { status: 405 })
+  if (!(await currentUser())?.id) return Response.json({ code: 'unauthorized', error: 'Sign in to use the AI planner.' }, { status: 401 })
+  try { checkOrigin(req) } catch { return Response.json({ code: 'invalid_origin' }, { status: 403 }) }
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return Response.json({ code: 'missing_key', error: 'The AI key is missing from the Functions environment.' }, { status: 503 })
 
   let input
-  try { input = await req.json() } catch { return Response.json({ code: 'invalid_request', error: 'Expected JSON.' }, { status: 400 }) }
+  try {
+    const raw = await req.text()
+    if (raw.length > 1_000_000) return Response.json({ code: 'too_large' }, { status: 413 })
+    input = JSON.parse(raw)
+  } catch { return Response.json({ code: 'invalid_request', error: 'Expected JSON.' }, { status: 400 }) }
   const { message, state, selectedDay, now, history } = input || {}
   if (!String(message || '').trim()) return Response.json({ code: 'invalid_request', error: 'Message is empty.' }, { status: 400 })
+  if (String(message).length > 4000) return Response.json({ code: 'too_large' }, { status: 413 })
   const conversation = []
   for (const turn of Array.isArray(history) ? history.slice(-8) : []) {
     if (!['user','assistant'].includes(turn?.role) || typeof turn.text !== 'string') continue
@@ -111,4 +120,5 @@ Planner state: ${JSON.stringify(state)}`
   return new Response(text, { headers: { 'content-type': 'application/json' } })
 }
 
+export default req => handleAssistant(req)
 export const config = { path: '/api/assistant' }

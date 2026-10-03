@@ -450,4 +450,93 @@ Alongside that foundation, goal decomposition should become the first higher-lev
 - Quick task entry without AI, scheduled through the deterministic engine.
 - Persistent local undo history and manual JSON backup export/import.
 
-These changes do not complete Milestone 4. The next checkpoint is authentication and a Postgres-backed source of truth for planner items, Inbox captures, operations, and snapshots, followed by migration from local data. Provisioning the production database requires a Netlify credits decision.
+These changes do not complete Milestone 4. The next checkpoint is authentication and a Postgres-backed source of truth for planner items, Inbox captures, operations, and snapshots, followed by migration from local data.
+
+### Checkpoint 4B — accounts and cloud foundation (implemented locally 2026-10-01)
+
+- Netlify Identity configured for invite-only registration. The account owner completes invitation acceptance and chooses a password.
+- Netlify Database migration stores account-scoped planner state, Inbox captures, recent conversation, undo history, and the last 20 planner snapshots.
+- The app gives an explicit choice when a local plan and cloud plan differ. Revision checks pause sync rather than silently overwriting another device’s work.
+- JSON backup now includes history and conversation. Cloud deletion leaves the device copy intact.
+- AI endpoints require sign-in, protecting the server-side API key from anonymous use.
+
+Production deployment and owner account acceptance must be verified before marking this checkpoint complete. Subsequent work: server-side restoration of earlier snapshots, per-operation event history, persistent unresolved questions, then goal decomposition.
+
+### Checkpoint 4C — durable Inbox review (implemented locally 2026-10-02)
+
+- Each brain-dump capture now stores its review draft with the account-scoped planner state.
+- Unapplied items remain in Inbox after a partial import and can be reopened after a refresh or cloud sync.
+- Corrections to type, day, recurrence, due day, time, duration, goal target, unit, and planning notes are saved with the draft.
+- Review item IDs are made unique before partial application, so applying one item cannot accidentally remove another.
+
+The live site remains on checkpoint 4A to conserve production deploy credits. Checkpoint 4C passed remote unsigned preview testing; account-backed recovery awaits the owner account. Next: goal decomposition, followed by snapshot restoration and operation history.
+
+### Checkpoint 4D — goal decomposition (implemented locally 2026-10-02)
+
+- Goals and open loops can become editable roadmaps with two to four milestones and one small next action.
+- Signed-in users can request an AI suggestion through a server-side, account-protected Function. Without sign-in or when AI is unavailable, an editable starter roadmap remains available.
+- Saving a roadmap does not change the schedule. **Save & plan next step** passes the action to the deterministic planner, which protects fixed commitments and free time. Editing a linked action updates its planner task.
+- Roadmaps live with their goal or open loop in local storage, backups, and account-scoped cloud state.
+
+The draft pull request and Deploy Preview carry this checkpoint while production remains on 4A. Remote unsigned flow was checked; signed-in AI/sync verification awaits the owner account. Next: restore earlier server snapshots from History, then add per-operation history.
+
+### Checkpoint 4E — server snapshot recovery (implemented locally 2026-10-02)
+
+- Signed-in History can list the last 20 account-scoped server versions.
+- Restoring a version creates a new current cloud revision in one database transaction, using an expected-revision check to protect changes made on another device.
+- The current planner is saved in Undo before restoration. The user confirms the chosen version, then can undo the restoration.
+- Cloud versions include the planner state; the current conversation remains intact. Existing cloud deletion removes both the planner and its snapshots through the database relationship.
+
+The draft preview carries this checkpoint while production remains on 4A. Signed-in end-to-end recovery awaits the owner account. Next: per-operation history and persistent unresolved questions.
+
+### Checkpoint 4F — planning memory (implemented locally 2026-10-02)
+
+- Every Undo-backed planner action now adds a concise operation record with a timestamp and a summary of changed planner blocks, goals, open loops, rules, Inbox captures, or questions. The latest 100 records remain with the planner state and the latest 50 display in History.
+- Assistant clarification questions persist in the planner state. Inbox presents pending questions with **Answer** and **Dismiss** actions. Answering opens the Planner composer, including its voice control, and resolves the question only after a successful reply.
+- Inbox capture questions are visible from the Inbox even when the review is closed, with a direct path back to the related review item.
+- The operation log and question list follow the existing local backup and account-scoped cloud sync flows.
+
+Production remains on checkpoint 4A. The draft preview still needs signed-in question and sync checks after the owner account is available. Next: a release readiness pass across the full Milestone 4 feature set.
+
+### Checkpoint 5A — daily planning intensity (implemented locally 2026-10-02)
+
+- Today offers one-tap Minimum, Normal, and Ambitious modes per weekday.
+- Minimum reserves three additional hours, Normal one additional hour, and Ambitious uses the existing protected-free-time target. All modes preserve the user's configured free-time floor and leave fixed commitments anchored.
+- Choosing a mode replans flexible work through the deterministic scheduler, saves the choice in local/cloud planner state and backups, and creates an Undo point and operation record.
+
+This is the first Milestone 5 checkpoint. Actual-vs-estimated durations, skip patterns, learned preferences, and explicit controls for those assumptions remain future checkpoints.
+
+### Checkpoint 5B — observed work (implemented locally 2026-10-02)
+
+- Finishing flexible work records its estimate and an actual duration. The user can correct actual time with a short menu, without typing.
+- A flexible block can be skipped and later brought back. Skipped blocks are excluded from scheduling and capacity calculations until restored.
+- Recent completion and skip records appear in History and are saved with local planner state, backups, and cloud sync. Undo reverses these changes.
+- The app collects observations without silently changing future task estimates.
+
+Next: summarize recurring duration and skip patterns, then let the user explicitly accept or reject a suggested estimate or preferred window.
+
+### Checkpoint 5C — user-controlled duration suggestions (implemented locally 2026-10-02)
+
+- After at least two completed blocks with the same title, Daylight uses the median of up to ten recent actual durations to suggest a revised estimate when it differs materially from the current one.
+- A suggestion is visible on an unfinished flexible block. **Use** updates only that block and reruns deterministic planning; **Ignore this suggestion** suppresses the same suggestion until restored from History.
+- Accepted and ignored choices persist with local planner state, backups, and cloud sync. Undo applies to either choice.
+- No estimate changes automatically. Preferred-window learning and completion probability remain later work.
+
+### Checkpoint 5D — work patterns and time preferences (implemented locally 2026-10-03)
+
+- Recent attempts with the same title produce a simple finished/skipped count after at least three records. The display uses up to ten attempts and does not claim a reliable success probability.
+- Completed records retain their scheduled start time. Three or more matching completed blocks in the same broad time band may generate an optional preferred-window suggestion. Skips do not count as positive evidence for a window.
+- **Prefer morning/afternoon/evening** applies the window only to the chosen unfinished flexible block, then runs deterministic planning. **Ignore this suggestion** persists until **Show again** in History. Undo covers both actions.
+- Scheduled start time is not evidence of when work actually began. Calendar dates, recurrence, and stronger adaptive signals remain later work.
+
+### Checkpoint 9A — mobile readability and touch controls (implemented locally 2026-10-03)
+
+- On narrow screens, the account form starts in a compact Cloud sync disclosure so the day is closer to the top. Invitation acceptance and unresolved cloud choices still open the disclosure.
+- The phone layout increases tap areas and text sizes for navigation, weekday tabs, day modes, quick task entry, work actions, checkmarks, routine steps, and voice/chat controls.
+- Completed and skipped blocks use higher contrast. This is an early mobile pass; installability, offline behavior, device testing, and a full accessibility audit remain later work.
+
+### Checkpoint 4G — AI endpoint safeguards (implemented locally 2026-10-03)
+
+- Assistant and brain-dump AI requests now use the same signed-in origin check already used by goal breakdown and cloud write operations.
+- Both endpoints reject oversized request bodies before parsing and sending data to the AI provider. The assistant message and brain-dump text also have explicit length limits.
+- Account sign-in and an actual provider request are still required to verify that the live preview's AI connection succeeds end to end.
