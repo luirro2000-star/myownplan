@@ -488,3 +488,12 @@ The draft pull request and Deploy Preview carry this checkpoint while production
 - Cloud versions include the planner state; the current conversation remains intact. Existing cloud deletion removes both the planner and its snapshots through the database relationship.
 
 The draft preview carries this checkpoint while production remains on 4A. Signed-in end-to-end recovery awaits the owner account. Next: per-operation history and persistent unresolved questions.
+
+### Checkpoint 4F — planning memory (implemented locally 2026-10-02)
+
+- Every Undo-backed planner action now adds a concise operation record with a timestamp and a summary of changed planner blocks, goals, open loops, rules, Inbox captures, or questions. The latest 100 records remain with the planner state and the latest 50 display in History.
+- Assistant clarification questions persist in the planner state. Inbox presents pending questions with **Answer** and **Dismiss** actions. Answering opens the Planner composer, including its voice control, and resolves the question only after a successful reply.
+- Inbox capture questions are visible from the Inbox even when the review is closed, with a direct path back to the related review item.
+- The operation log and question list follow the existing local backup and account-scoped cloud sync flows.
+
+Production remains on checkpoint 4A. The draft preview still needs signed-in question and sync checks after the owner account is available. Next: a release readiness pass across the full Milestone 4 feature set.

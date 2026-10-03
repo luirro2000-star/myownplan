@@ -89,6 +89,8 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
 .composer-tools { display: flex; justify-content: flex-end; margin: 2px 0 0; }
 .composer-tools button { border: 0; background: transparent; color: #75756d; font: inherit; font-size: 10px; cursor: pointer; padding: 3px 1px; }
 .composer-tools button:hover { color: #20201c; }
+.answer-context { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; border-radius: 8px; background: #f6f0df; color: #695a34; padding: 7px 9px; font-size: 10px; line-height: 1.4; }
+.answer-context button { border: 0; background: transparent; color: inherit; font-size: 16px; cursor: pointer; }
 .quick-add { margin: 17px 46px 0; padding: 11px; display: flex; align-items: center; gap: 8px; border: 1px solid #e2e2da; border-radius: 10px; background: #fff; }
 .quick-add label { font-size: 11px; font-weight: 650; white-space: nowrap; }
 .quick-add input { flex: 1; min-width: 100px; }
@@ -101,6 +103,9 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
 .history-entry > div { display: grid; gap: 4px; }
 .history-entry strong { font-size: 12px; }
 .history-entry time { color: #85857d; font-size: 10px; }
+.history-entry span { color: #727269; font-size: 10px; }
+.operation-history, .undo-history { margin-top: 27px; }
+.operation-history .history-list, .undo-history .history-list { margin-top: 8px; }
 .backup-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin-top: 24px; }
 .backup-tools label { cursor: pointer; }
 .backup-tools > span { color: #85857d; font-size: 10px; }
@@ -268,6 +273,10 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
 .attention-box strong { font-size: 9px; color: #74531b; }
 .attention-box span { font-size: 9.5px; line-height: 1.4; color: #7b6a49; }
 .inbox-history { margin-top: 34px; }
+.inbox-questions { margin-top: 25px; border: 1px solid #eadab5; border-radius: 11px; background: #fbf7ec; padding: 16px; }
+.inbox-questions h2 { margin: 5px 0 12px; font-size: 17px; }
+.question-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid #ebe1c8; font-size: 11px; line-height: 1.45; }
+.question-row > div { display: flex; gap: 6px; flex-shrink: 0; }
 .section-head h2 { margin: 5px 0 12px; font-size: 17px; }
 .inbox-history-card { border-top: 1px solid #e5e5de; padding: 13px 0; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 18px; }
 .history-top { display: flex; gap: 8px; align-items: center; font-size: 8.5px; text-transform: uppercase; letter-spacing: .07em; color: #97978f; }

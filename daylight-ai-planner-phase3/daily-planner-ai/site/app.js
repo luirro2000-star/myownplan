@@ -17,6 +17,7 @@ import {
   finishIntakeCapture,
 } from './intake.js'
 import { normalizeGoalBreakdown, starterGoalBreakdown } from './goal-breakdown.js'
+import { captureQuestions, resolveQuestion, describeOperation } from './planning-memory.js'
 import { getUser, login, logout, handleAuthCallback, acceptInvite } from '@netlify/identity'
 
 const STORAGE_KEY = 'daylight-planner-v03-static'
@@ -77,6 +78,8 @@ const initialState = {
     { id:'career-loop', title:'Figure out next concrete step toward design internship', status:'open', details:'Keep as an open loop until it has a concrete next action.' },
   ],
   inbox: [],
+  questions: [],
+  operationLog: [],
   rules: [
     { id:'wake', text:'Wake up at 7:00 AM.' },
     { id:'sleep', text:'If waking at 7:00 AM, aim to be in bed between 10:30 and 11:00 PM.' },
@@ -103,6 +106,8 @@ function migrate(saved) {
   next.metrics ||= []
   next.openLoops ||= []
   next.inbox ||= []
+  next.questions ||= []
+  next.operationLog ||= []
   return next
 }
 function load() {
@@ -114,7 +119,15 @@ function load() {
     return clone(initialState)
   } catch { return clone(initialState) }
 }
-function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); queueCloudSave() }
+let pendingOperation = null
+function save() {
+  if(pendingOperation){
+    const prior=Array.isArray(state.operationLog)&&state.operationLog.length?state.operationLog:pendingOperation.before.operationLog||[]
+    state.operationLog=[...prior,{id:pendingOperation.id,label:pendingOperation.label,at:pendingOperation.at,summary:describeOperation(pendingOperation.before,state)}].slice(-100)
+    pendingOperation=null
+  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); queueCloudSave()
+}
 function loadHistory() {
   try {
     const saved=JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY))
@@ -204,6 +217,7 @@ let brainDumpText = ''
 let intakeDraft = null
 let intakeCaptureId = null
 let goalDraft = null
+let activeQuestionId = null
 let messages = loadConversation()
 if(!messages.length)messages=[{ id:'hello', role:'assistant', text:"Tell me what changed, what you need to get done, or how you're feeling about the day. I’ll interpret it, then the planning engine will find feasible time." }]
 let accountUser = null
@@ -458,7 +472,10 @@ function goalsView() {
 function historyView() {
   return `<div class="view-pad"><div class="eyebrow">PLANNER HISTORY</div><h1>Recent changes</h1><p class="page-intro">Your last ${HISTORY_LIMIT} planner checkpoints survive a refresh and sync after you sign in.</p>
     <div class="backup-tools"><button class="secondary-button" data-action="export-backup">Download backup</button><label class="secondary-button" for="import-backup">Import backup</label><input id="import-backup" type="file" accept=".json,application/json" hidden><span>Backups include your personal planner notes. Keep the file private.</span></div>
+    <section class="operation-history"><div class="mini-label">WHAT CHANGED</div>${state.operationLog?.length?`<div class="history-list">${state.operationLog.slice(-50).reverse().map(entry=>`<div class="history-entry"><div><strong>${esc(entry.label)}</strong><span>${esc(entry.summary||'Planner details updated')}</span><time>${esc(new Date(entry.at).toLocaleString())}</time></div></div>`).join('')}</div>`:'<div class="empty-state">No recorded changes yet.</div>'}</section>
+    <section class="undo-history"><div class="mini-label">UNDO POINTS</div>
     ${undoStack.length?`<div class="history-list">${undoStack.slice().reverse().map((entry,index)=>`<div class="history-entry"><div><strong>${esc(entry.label)}</strong><time>${esc(entry.at?new Date(entry.at).toLocaleString():'Earlier')}</time></div>${index===0?'<button class="secondary-button" data-action="undo-history">Undo this change</button>':''}</div>`).join('')}</div>`:'<div class="empty-state">No planner changes yet.</div>'}
+    </section>
     ${accountUser?`<section class="cloud-history"><div class="section-head"><div><div class="mini-label">CLOUD RECOVERY</div><h2>Earlier cloud versions</h2></div><button class="secondary-button" data-action="load-snapshots" ${!cloudReady||snapshotBusy?'disabled':''}>${snapshotBusy?'Please wait…':cloudSnapshots?'Refresh versions':'Show versions'}</button></div><p>Restore a saved planner version from this account. Your current plan remains available through Undo.</p>${snapshotNotice?`<p class="snapshot-notice" role="status">${esc(snapshotNotice)}</p>`:''}${cloudSnapshots?.length?`<div class="history-list">${cloudSnapshots.map(entry=>`<div class="history-entry"><div><strong>${esc(entry.label||'Saved planner')}</strong><time>${esc(new Date(entry.createdAt).toLocaleString())} · version ${entry.revision}</time></div><button class="secondary-button" data-restore-snapshot="${entry.revision}" ${!cloudReady||snapshotBusy||entry.revision===cloudRevision?'disabled':''}>${entry.revision===cloudRevision?'Current':'Restore'}</button></div>`).join('')}</div>`:''}</section>`:''}
   </div>`
 }
@@ -490,6 +507,9 @@ function goalBreakdownReview(){
 
 function inboxView() {
   const review = intakeDraft ? intakeReview() : ''
+  const pendingAssistant=state.questions.filter(item=>item.status==='pending')
+  const pendingIntake=state.inbox.flatMap(capture=>(capture.review?.items||[]).filter(item=>item.needsConfirmation&&item.question).map(item=>({captureId:capture.id,question:item.question})))
+  const questions=pendingAssistant.length||pendingIntake.length?`<section class="inbox-questions"><div class="section-head"><div><div class="mini-label">STILL TO CLARIFY</div><h2>Questions waiting for you</h2></div></div>${pendingAssistant.map(item=>`<div class="question-row"><span>${esc(item.text)}</span><div><button class="secondary-button" data-answer-question="${attr(item.id)}">Answer</button><button class="secondary-button" data-dismiss-question="${attr(item.id)}">Dismiss</button></div></div>`).join('')}${pendingIntake.map(item=>`<div class="question-row"><span>${esc(item.question)}</span><button class="secondary-button" data-resume-intake="${attr(item.captureId)}">Review item</button></div>`).join('')}</section>`:''
   const history = state.inbox.length ? `<section class="inbox-history"><div class="section-head"><div><div class="mini-label">CAPTURE HISTORY</div><h2>What you’ve told Daylight</h2></div></div>${state.inbox.slice().reverse().map(inboxHistoryCard).join('')}</section>` : ''
   return `<div class="view-pad intake-page"><div class="page-head"><div><div class="eyebrow">BRAIN DUMP INBOX</div><h1>Tell it everything.</h1><p class="page-intro">Don’t organize it first. Daylight separates fixed commitments, flexible work, routines, rules, goals, metrics, and things that are still too vague to schedule.</p></div></div>
     <section class="intake-composer">
@@ -497,6 +517,7 @@ function inboxView() {
       <textarea id="brain-dump-input" placeholder="Monday\n8:30 - Matt\n7:15 - Motion 3D\n\nMake my bed every day...">${esc(brainDumpText)}</textarea>
       <div class="intake-actions"><button class="secondary-button" data-action="sample-intake">Use example</button><div class="intake-action-group"><button class="secondary-button" type="button" data-voice="inbox" aria-label="Speak brain dump">🎙 Speak</button><button class="reality-button" data-action="analyze-intake" ${intakeSending?'disabled':''}>${intakeSending?'Interpreting…':'✦ Understand this'}</button></div></div><div class="voice-status" data-voice-status="inbox" aria-live="polite"></div><p class="voice-note">Your browser handles transcription and may use its speech service. Review the text before sending it to Daylight.</p>
     </section>
+    ${questions}
     ${review}
     ${history}
   </div>`
@@ -542,7 +563,7 @@ function assistantPanel() {
   return `<aside class="assistant-panel ${chatOpen?'':'collapsed'}"><button class="assistant-toggle" data-action="chat-toggle">◌</button>${chatOpen?`
     <div class="assistant-head"><div class="assistant-title"><span class="icon">✦</span> Planner</div><div class="assistant-status">AI understands intent · engine owns time arithmetic</div></div>
     <div class="chat-thread">${messages.map(chatBubble).join('')}${sending?'<div class="thinking"><span class="spin">↻</span> Interpreting what changed…</div>':''}</div>
-    <div class="composer"><textarea id="chat-input" placeholder="Tell me what's going on…" rows="3"></textarea><button data-action="send" aria-label="Send message">➤</button><button type="button" class="voice-button" data-voice="chat" aria-label="Speak to planner">🎙</button><div class="voice-status" data-voice-status="chat" aria-live="polite"></div><div class="composer-tools"><button type="button" data-action="read-aloud" aria-pressed="${readRepliesAloud}">${readRepliesAloud?'🔊 Voice replies on':'🔈 Read replies aloud'}</button></div><div class="composer-hint">Your browser handles voice transcription. Review the text, then send it. Proposed changes still need your approval.</div></div>`:''}</aside>`
+    <div class="composer">${activeQuestionId?`<div class="answer-context">Answering: ${esc(state.questions.find(item=>item.id===activeQuestionId)?.text||'Question')} <button data-action="cancel-answer" aria-label="Cancel answer">×</button></div>`:''}<textarea id="chat-input" placeholder="${activeQuestionId?'Your answer…':"Tell me what's going on…"}" rows="3"></textarea><button data-action="send" aria-label="Send message">➤</button><button type="button" class="voice-button" data-voice="chat" aria-label="Speak to planner">🎙</button><div class="voice-status" data-voice-status="chat" aria-live="polite"></div><div class="composer-tools"><button type="button" data-action="read-aloud" aria-pressed="${readRepliesAloud}">${readRepliesAloud?'🔊 Voice replies on':'🔈 Read replies aloud'}</button></div><div class="composer-hint">Your browser handles voice transcription. Review the text, then send it. Proposed changes still need your approval.</div></div>`:''}</aside>`
 }
 function chatBubble(m) {
   return `<div class="bubble-wrap ${m.role}"><div class="bubble">${esc(m.text)}</div>${m.proposals?.length?`<div class="proposal-list">${m.proposals.map((p,i)=>proposalCard(p,i,m.id)).join('')}</div>`:''}${m.questions?.map(q=>`<div class="question-chip">${esc(q)}</div>`).join('')||''}</div>`
@@ -580,6 +601,9 @@ function bindEvents() {
   document.querySelector('[data-action="send"]')?.addEventListener('click',()=>sendMessage())
   document.querySelectorAll('[data-voice]').forEach(el=>el.addEventListener('click',()=>toggleVoice(el.dataset.voice)))
   document.querySelector('[data-action="read-aloud"]')?.addEventListener('click',()=>{readRepliesAloud=!readRepliesAloud;try{localStorage.setItem('daylight-read-replies',String(readRepliesAloud))}catch{};if(!readRepliesAloud)globalThis.speechSynthesis?.cancel();render()})
+  document.querySelector('[data-action="cancel-answer"]')?.addEventListener('click',()=>{activeQuestionId=null;render()})
+  document.querySelectorAll('[data-answer-question]').forEach(el=>el.addEventListener('click',()=>{activeQuestionId=el.dataset.answerQuestion;chatOpen=true;render();document.querySelector('#chat-input')?.focus()}))
+  document.querySelectorAll('[data-dismiss-question]').forEach(el=>el.addEventListener('click',()=>{const question=state.questions.find(item=>item.id===el.dataset.dismissQuestion);if(!question)return;pushUndo('Dismissed a question');state.questions=resolveQuestion(state.questions,question.id,'dismissed');save();render()}))
   document.querySelector('#quick-add-form')?.addEventListener('submit',quickAddTask)
   document.querySelector('[data-action="sample-intake"]')?.addEventListener('click',()=>{brainDumpText=sampleBrainDump();render()})
   document.querySelector('[data-action="analyze-intake"]')?.addEventListener('click',analyzeIntake)
@@ -596,7 +620,7 @@ function bindEvents() {
 
   const textarea=document.querySelector('#chat-input'); if(textarea) textarea.onkeydown=(e)=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}}
   const dump=document.querySelector('#brain-dump-input'); if(dump) dump.oninput=(e)=>{brainDumpText=e.target.value}
-  document.querySelector('[data-goal-progress="points"]')?.addEventListener('input',(e)=>{const goal=state.goals.find(g=>g.id==='points'); if(goal){goal.progress=Number(e.target.value);save();render()}})
+  document.querySelector('[data-goal-progress="points"]')?.addEventListener('change',(e)=>{const goal=state.goals.find(g=>g.id==='points'); if(goal){pushUndo('Updated school points');goal.progress=Number(e.target.value);save();render()}})
   document.querySelectorAll('[data-goal-breakdown]').forEach(el=>el.addEventListener('click',()=>{
     const [kind,id]=el.dataset.goalBreakdown.split(':')
     suggestGoalBreakdown(kind,id)
@@ -709,6 +733,7 @@ function saveGoalBreakdown(schedule){
 }
 
 function pushUndo(label) {
+  pendingOperation={id:uid(),label,at:new Date().toISOString(),before:clone(state)}
   undoStack.push({label,at:new Date().toISOString(),state:clone(state)})
   if(undoStack.length>HISTORY_LIMIT) undoStack.shift()
   saveHistory()
@@ -716,7 +741,10 @@ function pushUndo(label) {
 function undoLast() {
   const previous=undoStack.pop()
   if(!previous)return
+  const before=state
   state=previous.state
+  state.operationLog=[...(before.operationLog||[]),{id:uid(),label:`Undid ${previous.label}`,at:new Date().toISOString(),summary:describeOperation(before,state)}].slice(-100)
+  pendingOperation=null
   saveHistory()
   save()
   messages.push({id:uid(),role:'assistant',text:`Undid: ${previous.label}.`})
@@ -783,6 +811,7 @@ async function analyzeIntake(){
   }
   const capture=createIntakeCapture({id:uid(),rawText:brainDumpText,analysis:intakeDraft,source})
   intakeCaptureId=capture.id
+  pushUndo('Captured brain dump')
   state.inbox.push(capture)
   save(); render()
 }
@@ -813,12 +842,19 @@ function applyIntakeDraft(){
 async function sendMessage(explicit='') {
   const textarea=document.querySelector('#chat-input')
   const text=(explicit || textarea?.value || '').trim(); if(!text||sending)return
+  const answering=state.questions.find(item=>item.id===activeQuestionId&&item.status==='pending')
   messages.push({id:uid(),role:'user',text}); sending=true; render()
   try {
     const history=messages.slice(-9,-1).filter(m=>m.id!=='hello'&&(m.role==='user'||(m.role==='assistant'&&!m.error))).map(m=>({role:m.role,text:m.text}))
-    const res=await fetch('/api/assistant',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message:text,history,selectedDay,now:new Date().toISOString(),state})})
+    const message=answering?`Answer to your earlier question "${answering.text}": ${text}`:text
+    const res=await fetch('/api/assistant',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message,history,selectedDay,now:new Date().toISOString(),state})})
     if(!res.ok) throw await apiError(res)
     const data=await res.json(); messages.push({id:uid(),role:'assistant',text:data.reply,proposals:data.proposals,questions:data.questions});speakReply(data.reply)
+    if(answering){pushUndo('Answered a question');state.questions=resolveQuestion(state.questions,answering.id,'answered');activeQuestionId=null}
+    const nextQuestions=captureQuestions(state.questions,data.questions,{idFactory:uid})
+    if(!answering&&JSON.stringify(nextQuestions)!==JSON.stringify(state.questions))pushUndo('Planner asked a question')
+    state.questions=nextQuestions
+    save()
   } catch(err) {
     messages.push({id:uid(),role:'assistant',text:connectionErrorMessage(err),error:true})
   } finally { sending=false; render() }
@@ -948,6 +984,7 @@ function applyProposal(p) {
   else if(p.action==='goal') state.goals.push({id:uid(),title:p.title,cadence:p.details||'Ongoing',progress:0,target:1,unit:'target'})
   else if(p.action==='replan') {
     undoStack.pop()
+    pendingOperation=null
     runPlanner({label:p.title||`Replanned ${p.day||selectedDay}`,startDay:p.day||selectedDay})
     return
   }

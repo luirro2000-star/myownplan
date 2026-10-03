@@ -110,6 +110,8 @@ History keeps the last 20 planner undo checkpoints. Signed-in accounts also save
 
 Signed-in users can also open **History → Earlier cloud versions** to restore one of the last 20 server snapshots. Restoring creates a new current version and keeps the pre-restore plan in Undo. A changed cloud revision pauses the restore so another device's edits are not overwritten.
 
+The Inbox keeps unanswered review questions alongside the capture that raised them. Questions raised by Planner also stay in Inbox after a reload; use **Answer** to reply by typing or speaking, or **Dismiss** if the question is no longer useful. History shows a concise record of planner operations as well as Undo points.
+
 In **Goals**, use **Find next step** to turn a goal or open loop into editable milestones and one small action. Signed-in users get an AI suggestion; offline users get a starter roadmap. **Save roadmap** keeps it for later, while **Save & plan next step** asks the scheduling engine to place the action. Editing a saved roadmap updates its linked planner task.
 
 ## Deployment
@@ -137,6 +139,7 @@ Netlify builds the Vite frontend to `dist` and deploys Functions from `netlify/f
 - `intake-regression-test.mjs`
 - `goal-breakdown-regression-test.mjs`
 - `planner-snapshots-regression-test.mjs`
+- `planning-memory-regression-test.mjs`
 
 Run all tests with:
 
@@ -145,4 +148,4 @@ npm test
 ```
 
 See `PHASE3_AUDIT.md` for the handoff audit and `MASTER_PLAN.md` for the roadmap.
-See `PHASE4E_AUDIT.md` for the current checkpoint audit and its remaining limits.
+See `PHASE4F_AUDIT.md` for the current checkpoint audit and its remaining limits.
