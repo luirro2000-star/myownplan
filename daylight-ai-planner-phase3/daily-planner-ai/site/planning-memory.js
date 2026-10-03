@@ -31,5 +31,6 @@ export function describeOperation(before, after) {
   }
   if (JSON.stringify(before?.plannerConfig) !== JSON.stringify(after?.plannerConfig)) parts.push('planning rules updated')
   if (JSON.stringify(before?.dayModes) !== JSON.stringify(after?.dayModes)) parts.push('day mode updated')
+  if ((before?.workLog?.length || 0) !== (after?.workLog?.length || 0)) parts.push('work pattern recorded')
   return parts.slice(0, 4).join(' · ') || 'Planner details updated'
 }

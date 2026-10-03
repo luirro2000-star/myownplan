@@ -19,6 +19,7 @@ import {
 import { normalizeGoalBreakdown, starterGoalBreakdown } from './goal-breakdown.js'
 import { captureQuestions, resolveQuestion, describeOperation } from './planning-memory.js'
 import { DAY_MODES, MODE_LABELS, MODE_HINTS, modeForDay, configForDayModes } from './day-modes.js'
+import { finishWork, reopenWork, skipWork, resumeWork, setActualTime } from './work-signals.js'
 import { getUser, login, logout, handleAuthCallback, acceptInvite } from '@netlify/identity'
 
 const STORAGE_KEY = 'daylight-planner-v03-static'
@@ -82,6 +83,7 @@ const initialState = {
   inbox: [],
   questions: [],
   operationLog: [],
+  workLog: [],
   rules: [
     { id:'wake', text:'Wake up at 7:00 AM.' },
     { id:'sleep', text:'If waking at 7:00 AM, aim to be in bed between 10:30 and 11:00 PM.' },
@@ -111,6 +113,7 @@ function migrate(saved) {
   next.inbox ||= []
   next.questions ||= []
   next.operationLog ||= []
+  next.workLog ||= []
   return next
 }
 function load() {
@@ -440,11 +443,16 @@ function timelineItem(it) {
     it.deadlineDay ? `due ${it.deadlineDay}` : '',
     it.generatedFromIntake ? 'from inbox' : '',
     it.unscheduled ? 'needs a slot' : '',
+    it.skipped ? 'skipped' : '',
   ].filter(Boolean)
-  return `<article class="timeline-item ${it.kind} ${it.completed?'done':''} ${it.unscheduled?'unscheduled':''}">
-    <div class="time-col"><span>${it.start?displayTime(it.start):'Unscheduled'}</span>${it.end?`<small>${displayTime(it.end)}</small>`:''}</div>
-    <button class="check ${it.completed?'checked':''}" data-toggle="${it.id}">${it.completed?'✓':'○'}</button>
-    <div class="item-body"><div class="item-topline"><div><h3>${esc(it.title)}</h3><div class="item-meta">${meta.map(x=>`<span>${esc(x)}</span>`).join('')}${it.note?`<span class="needs-attention">${esc(it.note)}</span>`:''}</div></div></div>${subtasks}</div>
+  const actualChoices=[5,10,15,20,30,45,60,90,120,180,240,480]
+  const actual=it.actualMinutes||it.durationMinutes||30
+  const actualOptions=[...new Set([actual,...actualChoices])].sort((a,b)=>a-b).map(minutes=>`<option value="${minutes}" ${minutes===actual?'selected':''}>${formatMinutes(minutes)}</option>`).join('')
+  const feedback=!isFixed(it)?it.skipped?`<div class="work-feedback"><button data-resume-work="${attr(it.id)}">Bring back</button><span>Skipped for now. Replan when you’re ready.</span></div>`:it.completed?`<div class="work-feedback"><label>Actually took <select data-actual-time="${attr(it.id)}">${actualOptions}</select></label><span>Estimated ${formatMinutes(it.durationMinutes||30)}</span></div>`:`<div class="work-feedback"><button data-skip-work="${attr(it.id)}">Skip this block</button></div>`:''
+  return `<article class="timeline-item ${it.kind} ${it.completed?'done':''} ${it.skipped?'skipped':''} ${it.unscheduled?'unscheduled':''}">
+    <div class="time-col"><span>${it.skipped?'Skipped':it.start?displayTime(it.start):'Unscheduled'}</span>${it.end?`<small>${displayTime(it.end)}</small>`:''}</div>
+    <button class="check ${it.completed?'checked':''}" data-toggle="${attr(it.id)}" ${it.skipped?'disabled':''}>${it.completed?'✓':'○'}</button>
+    <div class="item-body"><div class="item-topline"><div><h3>${esc(it.title)}</h3><div class="item-meta">${meta.map(x=>`<span>${esc(x)}</span>`).join('')}${it.note?`<span class="needs-attention">${esc(it.note)}</span>`:''}</div></div></div>${subtasks}${feedback}</div>
   </article>`
 }
 
@@ -478,6 +486,7 @@ function historyView() {
   return `<div class="view-pad"><div class="eyebrow">PLANNER HISTORY</div><h1>Recent changes</h1><p class="page-intro">Your last ${HISTORY_LIMIT} planner checkpoints survive a refresh and sync after you sign in.</p>
     <div class="backup-tools"><button class="secondary-button" data-action="export-backup">Download backup</button><label class="secondary-button" for="import-backup">Import backup</label><input id="import-backup" type="file" accept=".json,application/json" hidden><span>Backups include your personal planner notes. Keep the file private.</span></div>
     <section class="operation-history"><div class="mini-label">WHAT CHANGED</div>${state.operationLog?.length?`<div class="history-list">${state.operationLog.slice(-50).reverse().map(entry=>`<div class="history-entry"><div><strong>${esc(entry.label)}</strong><span>${esc(entry.summary||'Planner details updated')}</span><time>${esc(new Date(entry.at).toLocaleString())}</time></div></div>`).join('')}</div>`:'<div class="empty-state">No recorded changes yet.</div>'}</section>
+    <section class="work-history"><div class="mini-label">WORK PATTERNS</div>${state.workLog?.length?`<div class="history-list">${state.workLog.slice(-20).reverse().map(entry=>`<div class="history-entry"><div><strong>${esc(entry.title)}</strong><span>${entry.outcome==='completed'?`Estimated ${formatMinutes(entry.estimatedMinutes)} · actually ${formatMinutes(entry.actualMinutes)}`:'Skipped'}</span><time>${esc(new Date(entry.at).toLocaleString())}</time></div></div>`).join('')}</div>`:'<div class="empty-state">Finish or skip flexible work to see patterns here.</div>'}</section>
     <section class="undo-history"><div class="mini-label">UNDO POINTS</div>
     ${undoStack.length?`<div class="history-list">${undoStack.slice().reverse().map((entry,index)=>`<div class="history-entry"><div><strong>${esc(entry.label)}</strong><time>${esc(entry.at?new Date(entry.at).toLocaleString():'Earlier')}</time></div>${index===0?'<button class="secondary-button" data-action="undo-history">Undo this change</button>':''}</div>`).join('')}</div>`:'<div class="empty-state">No planner changes yet.</div>'}
     </section>
@@ -589,6 +598,9 @@ function bindEvents() {
   document.querySelectorAll('[data-day-mode]').forEach(el=>el.onclick=()=>setDayMode(el.dataset.dayMode))
   document.querySelectorAll('[data-open-day]').forEach(el=>el.onclick=()=>{selectedDay=el.dataset.openDay;view='today';render()})
   document.querySelectorAll('[data-toggle]').forEach(el=>el.onclick=()=>toggleItem(el.dataset.toggle))
+  document.querySelectorAll('[data-skip-work]').forEach(el=>el.onclick=()=>skipFlexibleWork(el.dataset.skipWork))
+  document.querySelectorAll('[data-resume-work]').forEach(el=>el.onclick=()=>resumeFlexibleWork(el.dataset.resumeWork))
+  document.querySelectorAll('[data-actual-time]').forEach(el=>el.onchange=()=>updateActualTime(el.dataset.actualTime,Number(el.value)))
   document.querySelectorAll('[data-subtask]').forEach(el=>el.onchange=()=>toggleSubtask(el.dataset.item,el.dataset.subtask))
   document.querySelectorAll('[data-apply]').forEach(el=>el.onclick=()=>{
     const [messageId,index]=el.dataset.apply.split(':'); const m=messages.find(m=>m.id===messageId); if(m?.proposals?.[Number(index)]) applyProposal(m.proposals[Number(index)])
@@ -804,7 +816,28 @@ function plannerSummary(moved,split,unresolved) {
 
 function toggleItem(id) {
   const it=state.items.find(i=>i.id===id)
-  if(it){pushUndo(`Checked ${it.title}`);it.completed=!it.completed;save();render()}
+  if(it&&!it.skipped){pushUndo(`${it.completed?'Reopened':'Finished'} ${it.title}`);state=it.completed?reopenWork(state,id):finishWork(state,id,{idFactory:uid});save();render()}
+}
+function skipFlexibleWork(id){
+  const it=state.items.find(item=>item.id===id)
+  if(!it||it.skipped||it.completed||isFixed(it))return
+  pushUndo(`Skipped ${it.title}`)
+  state=skipWork(state,id,{idFactory:uid})
+  save();render()
+}
+function resumeFlexibleWork(id){
+  const it=state.items.find(item=>item.id===id)
+  if(!it?.skipped)return
+  pushUndo(`Brought back ${it.title}`)
+  state=resumeWork(state,id)
+  save();render()
+}
+function updateActualTime(id,minutes){
+  const it=state.items.find(item=>item.id===id)
+  if(!it?.completed||it.actualMinutes===minutes)return
+  pushUndo(`Recorded time for ${it.title}`)
+  state=setActualTime(state,id,minutes)
+  save();render()
 }
 function toggleSubtask(itemId,subId) {
   const it=state.items.find(i=>i.id===itemId); const sub=it?.subtasks?.find(s=>s.id===subId)

@@ -505,3 +505,12 @@ Production remains on checkpoint 4A. The draft preview still needs signed-in que
 - Choosing a mode replans flexible work through the deterministic scheduler, saves the choice in local/cloud planner state and backups, and creates an Undo point and operation record.
 
 This is the first Milestone 5 checkpoint. Actual-vs-estimated durations, skip patterns, learned preferences, and explicit controls for those assumptions remain future checkpoints.
+
+### Checkpoint 5B — observed work (implemented locally 2026-10-02)
+
+- Finishing flexible work records its estimate and an actual duration. The user can correct actual time with a short menu, without typing.
+- A flexible block can be skipped and later brought back. Skipped blocks are excluded from scheduling and capacity calculations until restored.
+- Recent completion and skip records appear in History and are saved with local planner state, backups, and cloud sync. Undo reverses these changes.
+- The app collects observations without silently changing future task estimates.
+
+Next: summarize recurring duration and skip patterns, then let the user explicitly accept or reject a suggested estimate or preferred window.
