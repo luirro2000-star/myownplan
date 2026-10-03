@@ -108,6 +108,8 @@ Tap the microphone in Planner or Inbox to dictate. Review the transcript before 
 
 History keeps the last 20 planner undo checkpoints. Signed-in accounts also save the planner, Inbox, conversation, and undo history in Netlify Database. At first sign-in, Daylight asks whether to use the existing cloud plan or move this device’s plan to cloud. If two devices edit the same plan, automatic sync pauses for a choice. Use **Download backup** to save a JSON copy of planner data and history, or **Import backup** to restore one. Keep backups private. **Delete cloud copy** removes server data while leaving this device’s copy.
 
+Signed-in users can also open **History → Earlier cloud versions** to restore one of the last 20 server snapshots. Restoring creates a new current version and keeps the pre-restore plan in Undo. A changed cloud revision pauses the restore so another device's edits are not overwritten.
+
 In **Goals**, use **Find next step** to turn a goal or open loop into editable milestones and one small action. Signed-in users get an AI suggestion; offline users get a starter roadmap. **Save roadmap** keeps it for later, while **Save & plan next step** asks the scheduling engine to place the action. Editing a saved roadmap updates its linked planner task.
 
 ## Deployment
@@ -134,6 +136,7 @@ Netlify builds the Vite frontend to `dist` and deploys Functions from `netlify/f
 - `engine-regression-test.mjs`
 - `intake-regression-test.mjs`
 - `goal-breakdown-regression-test.mjs`
+- `planner-snapshots-regression-test.mjs`
 
 Run all tests with:
 
@@ -142,4 +145,4 @@ npm test
 ```
 
 See `PHASE3_AUDIT.md` for the handoff audit and `MASTER_PLAN.md` for the roadmap.
-See `PHASE4D_AUDIT.md` for the current checkpoint audit and its remaining limits.
+See `PHASE4E_AUDIT.md` for the current checkpoint audit and its remaining limits.

@@ -217,6 +217,9 @@ let cloudSaveTimer = 0
 let cloudSaving = false
 let cloudSaveQueued = false
 let lastSyncedPayload = ''
+let cloudSnapshots = null
+let snapshotBusy = false
+let snapshotNotice = ''
 
 const app = document.querySelector('#app')
 
@@ -335,7 +338,7 @@ async function acceptAccountInvite(event) {
 async function signOut() {
   clearTimeout(cloudSaveTimer);cloudReady=false
   try {await logout()} catch(error){accountError=error.message||'Sign out failed.';render();return}
-  accountUser=null;cloudCopy=null;cloudRevision=0;lastSyncedPayload='';accountStatus='Sign in with your invitation to sync across devices.';accountError='';render()
+  accountUser=null;cloudCopy=null;cloudRevision=0;lastSyncedPayload='';cloudSnapshots=null;snapshotNotice='';accountStatus='Sign in with your invitation to sync across devices.';accountError='';render()
 }
 async function deleteCloudCopy() {
   if(!confirm('Delete your cloud plan and saved history? The plan on this device will remain. This cannot be undone.'))return
@@ -344,6 +347,38 @@ async function deleteCloudCopy() {
     if(!response.ok)throw new Error('Cloud copy could not be deleted. Please try again.')
     cloudReady=false;cloudCopy={exists:false};cloudRevision=0;lastSyncedPayload='';accountStatus='Cloud copy deleted. Your plan is still on this device.';accountError='';render()
   } catch(error){accountError=error.message;renderAccountStatus()}
+}
+async function loadCloudSnapshots() {
+  if(!accountUser||!cloudReady||snapshotBusy)return
+  snapshotBusy=true;snapshotNotice='';render()
+  try {
+    const response=await fetch('/api/planner-snapshots',{cache:'no-store'})
+    if(!response.ok)throw new Error('Earlier cloud versions are unavailable right now.')
+    cloudSnapshots=(await response.json()).snapshots||[]
+    snapshotNotice=cloudSnapshots.length?'Choose a version to restore. Your current plan will remain available through Undo.':'No earlier cloud versions yet.'
+  } catch(error){snapshotNotice=error.message}
+  finally {snapshotBusy=false;render()}
+}
+async function restoreCloudSnapshot(revision) {
+  if(!accountUser||!cloudReady||cloudSaving||snapshotBusy)return
+  const chosen=cloudSnapshots?.find(entry=>entry.revision===revision)
+  if(!chosen||revision===cloudRevision)return
+  if(!confirm(`Restore cloud version ${revision} from ${new Date(chosen.createdAt).toLocaleString()}? Your current planner will be saved in Undo.`))return
+  const nextHistory=[...undoStack,{label:`Before restoring cloud version ${revision}`,at:new Date().toISOString(),state:clone(state)}].slice(-HISTORY_LIMIT)
+  clearTimeout(cloudSaveTimer);cloudReady=false;snapshotBusy=true;snapshotNotice='Restoring your plan…';render()
+  try {
+    const response=await fetch('/api/planner-snapshots',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({revision,expectedRevision:cloudRevision,history:nextHistory})})
+    const result=await response.json()
+    if(response.status===409){snapshotNotice='Another device changed your plan. Choose which copy to keep before restoring.';await loadCloudCopy();return}
+    if(!response.ok)throw new Error('This version could not be restored. Your current plan is unchanged.')
+    state=migrate(result.state);undoStack=nextHistory;goalDraft=null;intakeDraft=null;intakeCaptureId=null
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(state))
+    localStorage.setItem(HISTORY_STORAGE_KEY,JSON.stringify(undoStack))
+    cloudRevision=result.revision;lastSyncedPayload=JSON.stringify(cloudPayload());cloudReady=true
+    accountStatus='Synced across your devices';accountError='';cloudSnapshots=null
+    snapshotNotice=`Version ${revision} restored. Use Undo to return to the plan you had before.`
+  } catch(error){cloudReady=true;snapshotNotice=error.message||'This version could not be restored.'}
+  finally {snapshotBusy=false;render()}
 }
 function navButton(id, icon, label) { return `<button class="nav-item ${view===id?'active':''}" data-view="${id}"><span class="icon">${icon}</span>${label}</button>` }
 
@@ -424,6 +459,7 @@ function historyView() {
   return `<div class="view-pad"><div class="eyebrow">PLANNER HISTORY</div><h1>Recent changes</h1><p class="page-intro">Your last ${HISTORY_LIMIT} planner checkpoints survive a refresh and sync after you sign in.</p>
     <div class="backup-tools"><button class="secondary-button" data-action="export-backup">Download backup</button><label class="secondary-button" for="import-backup">Import backup</label><input id="import-backup" type="file" accept=".json,application/json" hidden><span>Backups include your personal planner notes. Keep the file private.</span></div>
     ${undoStack.length?`<div class="history-list">${undoStack.slice().reverse().map((entry,index)=>`<div class="history-entry"><div><strong>${esc(entry.label)}</strong><time>${esc(entry.at?new Date(entry.at).toLocaleString():'Earlier')}</time></div>${index===0?'<button class="secondary-button" data-action="undo-history">Undo this change</button>':''}</div>`).join('')}</div>`:'<div class="empty-state">No planner changes yet.</div>'}
+    ${accountUser?`<section class="cloud-history"><div class="section-head"><div><div class="mini-label">CLOUD RECOVERY</div><h2>Earlier cloud versions</h2></div><button class="secondary-button" data-action="load-snapshots" ${!cloudReady||snapshotBusy?'disabled':''}>${snapshotBusy?'Please wait…':cloudSnapshots?'Refresh versions':'Show versions'}</button></div><p>Restore a saved planner version from this account. Your current plan remains available through Undo.</p>${snapshotNotice?`<p class="snapshot-notice" role="status">${esc(snapshotNotice)}</p>`:''}${cloudSnapshots?.length?`<div class="history-list">${cloudSnapshots.map(entry=>`<div class="history-entry"><div><strong>${esc(entry.label||'Saved planner')}</strong><time>${esc(new Date(entry.createdAt).toLocaleString())} · version ${entry.revision}</time></div><button class="secondary-button" data-restore-snapshot="${entry.revision}" ${!cloudReady||snapshotBusy||entry.revision===cloudRevision?'disabled':''}>${entry.revision===cloudRevision?'Current':'Restore'}</button></div>`).join('')}</div>`:''}</section>`:''}
   </div>`
 }
 function goalCard(g){
@@ -533,6 +569,8 @@ function bindEvents() {
   document.querySelector('[data-action="reset"]')?.addEventListener('click',()=>{pushUndo('Before reset');state=clone(initialState);intakeDraft=null;intakeCaptureId=null;goalDraft=null;brainDumpText='';save();messages.push({id:uid(),role:'assistant',text:'Prototype data restored.'});render()})
   document.querySelector('[data-action="undo"]')?.addEventListener('click',undoLast)
   document.querySelector('[data-action="undo-history"]')?.addEventListener('click',undoLast)
+  document.querySelector('[data-action="load-snapshots"]')?.addEventListener('click',loadCloudSnapshots)
+  document.querySelectorAll('[data-restore-snapshot]').forEach(el=>el.addEventListener('click',()=>restoreCloudSnapshot(Number(el.dataset.restoreSnapshot))))
   document.querySelector('[data-action="export-backup"]')?.addEventListener('click',exportBackup)
   document.querySelector('#import-backup')?.addEventListener('change',importBackup)
   document.querySelector('[data-action="chat-toggle"]')?.addEventListener('click',()=>{stopVoice();chatOpen=!chatOpen;render()})

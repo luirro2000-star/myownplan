@@ -478,4 +478,13 @@ The live site remains on checkpoint 4A to conserve production deploy credits. Ch
 - Saving a roadmap does not change the schedule. **Save & plan next step** passes the action to the deterministic planner, which protects fixed commitments and free time. Editing a linked action updates its planner task.
 - Roadmaps live with their goal or open loop in local storage, backups, and account-scoped cloud state.
 
-The draft pull request and Deploy Preview carry this checkpoint while production remains on 4A. Remote unsigned flow and signed-in AI/sync verification are separate audit checks. Next: restore earlier server snapshots from History, then add per-operation history.
+The draft pull request and Deploy Preview carry this checkpoint while production remains on 4A. Remote unsigned flow was checked; signed-in AI/sync verification awaits the owner account. Next: restore earlier server snapshots from History, then add per-operation history.
+
+### Checkpoint 4E — server snapshot recovery (implemented locally 2026-10-02)
+
+- Signed-in History can list the last 20 account-scoped server versions.
+- Restoring a version creates a new current cloud revision in one database transaction, using an expected-revision check to protect changes made on another device.
+- The current planner is saved in Undo before restoration. The user confirms the chosen version, then can undo the restoration.
+- Cloud versions include the planner state; the current conversation remains intact. Existing cloud deletion removes both the planner and its snapshots through the database relationship.
+
+The draft preview carries this checkpoint while production remains on 4A. Signed-in end-to-end recovery awaits the owner account. Next: per-operation history and persistent unresolved questions.
