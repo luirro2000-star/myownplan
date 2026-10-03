@@ -514,3 +514,10 @@ This is the first Milestone 5 checkpoint. Actual-vs-estimated durations, skip pa
 - The app collects observations without silently changing future task estimates.
 
 Next: summarize recurring duration and skip patterns, then let the user explicitly accept or reject a suggested estimate or preferred window.
+
+### Checkpoint 5C — user-controlled duration suggestions (implemented locally 2026-10-02)
+
+- After at least two completed blocks with the same title, Daylight uses the median of up to ten recent actual durations to suggest a revised estimate when it differs materially from the current one.
+- A suggestion is visible on an unfinished flexible block. **Use** updates only that block and reruns deterministic planning; **Ignore this suggestion** suppresses the same suggestion until restored from History.
+- Accepted and ignored choices persist with local planner state, backups, and cloud sync. Undo applies to either choice.
+- No estimate changes automatically. Preferred-window learning and completion probability remain later work.

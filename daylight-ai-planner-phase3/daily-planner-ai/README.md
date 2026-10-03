@@ -116,6 +116,8 @@ On **Today**, choose **Minimum**, **Normal**, or **Ambitious** to replan that we
 
 For flexible work, mark a block finished and choose how long it actually took from the quick menu. You can also **Skip this block** and later **Bring back**; skipped work is left out of replanning until restored. History shows the recent estimated-versus-actual times and skips. These observations are saved, but Daylight does not silently change future estimates.
 
+After at least two completions with the same title, Daylight may suggest a typical duration based on the median of recent actual times. **Use** applies that estimate to the chosen block and replans; **Ignore this suggestion** hides that suggestion until you choose **Show again** in History. Suggestions never change estimates automatically.
+
 In **Goals**, use **Find next step** to turn a goal or open loop into editable milestones and one small action. Signed-in users get an AI suggestion; offline users get a starter roadmap. **Save roadmap** keeps it for later, while **Save & plan next step** asks the scheduling engine to place the action. Editing a saved roadmap updates its linked planner task.
 
 ## Deployment
@@ -146,6 +148,7 @@ Netlify builds the Vite frontend to `dist` and deploys Functions from `netlify/f
 - `planning-memory-regression-test.mjs`
 - `day-modes-regression-test.mjs`
 - `work-signals-regression-test.mjs`
+- `duration-learning-regression-test.mjs`
 
 Run all tests with:
 
@@ -154,4 +157,4 @@ npm test
 ```
 
 See `PHASE3_AUDIT.md` for the handoff audit and `MASTER_PLAN.md` for the roadmap.
-See `PHASE5B_AUDIT.md` for the current checkpoint audit and its remaining limits.
+See `PHASE5C_AUDIT.md` for the current checkpoint audit and its remaining limits.
