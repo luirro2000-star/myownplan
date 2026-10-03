@@ -534,3 +534,9 @@ Next: summarize recurring duration and skip patterns, then let the user explicit
 - On narrow screens, the account form starts in a compact Cloud sync disclosure so the day is closer to the top. Invitation acceptance and unresolved cloud choices still open the disclosure.
 - The phone layout increases tap areas and text sizes for navigation, weekday tabs, day modes, quick task entry, work actions, checkmarks, routine steps, and voice/chat controls.
 - Completed and skipped blocks use higher contrast. This is an early mobile pass; installability, offline behavior, device testing, and a full accessibility audit remain later work.
+
+### Checkpoint 4G — AI endpoint safeguards (implemented locally 2026-10-03)
+
+- Assistant and brain-dump AI requests now use the same signed-in origin check already used by goal breakdown and cloud write operations.
+- Both endpoints reject oversized request bodies before parsing and sending data to the AI provider. The assistant message and brain-dump text also have explicit length limits.
+- Account sign-in and an actual provider request are still required to verify that the live preview's AI connection succeeds end to end.

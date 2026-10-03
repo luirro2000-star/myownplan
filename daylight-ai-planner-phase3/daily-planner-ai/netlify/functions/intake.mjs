@@ -1,4 +1,4 @@
-import { getUser } from '@netlify/identity'
+import { getUser, verifyRequestOrigin } from '@netlify/identity'
 
 const days = ['Monday','Tuesday','Wednesday','Thursday','Friday']
 
@@ -45,14 +45,19 @@ const responseSchema = {
   required: ['summary','understood','questions'],
 }
 
-export async function handleIntake(req, { currentUser = getUser } = {}) {
+export async function handleIntake(req, { currentUser = getUser, checkOrigin = verifyRequestOrigin } = {}) {
   if (req.method !== 'POST') return Response.json({ error: 'Method not allowed' }, { status: 405 })
   if (!(await currentUser())?.id) return Response.json({ code: 'unauthorized', error: 'Sign in to use AI intake.' }, { status: 401 })
+  try { checkOrigin(req) } catch { return Response.json({ code: 'invalid_origin' }, { status: 403 }) }
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return Response.json({ code: 'missing_key', error: 'The AI key is missing from the Functions environment.' }, { status: 503 })
 
   let input
-  try { input = await req.json() } catch { return Response.json({ code: 'invalid_request', error: 'Expected JSON.' }, { status: 400 }) }
+  try {
+    const raw = await req.text()
+    if (raw.length > 1_000_000) return Response.json({ code: 'too_large' }, { status: 413 })
+    input = JSON.parse(raw)
+  } catch { return Response.json({ code: 'invalid_request', error: 'Expected JSON.' }, { status: 400 }) }
   const { text, state, now } = input || {}
   if (!String(text || '').trim()) return Response.json({ error: 'Brain dump is empty.' }, { status: 400 })
   if (String(text).length > 30_000) return Response.json({ code: 'too_large', error: 'Brain dump is too long.' }, { status: 413 })

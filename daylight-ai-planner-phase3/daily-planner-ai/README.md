@@ -162,4 +162,4 @@ npm test
 ```
 
 See `PHASE3_AUDIT.md` for the handoff audit and `MASTER_PLAN.md` for the roadmap.
-See `PHASE9A_AUDIT.md` for the current mobile usability audit and its remaining limits.
+See `PHASE9A_AUDIT.md` for the mobile usability audit and `PHASE4G_AUDIT.md` for the current AI endpoint audit.
