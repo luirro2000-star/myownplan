@@ -357,7 +357,15 @@ async function signIn(event) {
 }
 async function acceptAccountInvite(event) {
   event.preventDefault()
-  try {accountUser=await acceptInvite(inviteToken,event.target.querySelector('#invite-password').value);inviteToken='';await loadCloudCopy()}
+  try {
+    const password=event.target.querySelector('#invite-password').value
+    const invitedUser=await acceptInvite(inviteToken,password)
+    inviteToken=''
+    // Invite acceptance creates a session, but the Identity SDK does not set
+    // the auth cookie required by our server functions until a normal login.
+    accountUser=await login(invitedUser.email,password)
+    await loadCloudCopy()
+  }
   catch(error){accountError=error.message||'Invitation could not be accepted.';render()}
 }
 async function signOut() {
