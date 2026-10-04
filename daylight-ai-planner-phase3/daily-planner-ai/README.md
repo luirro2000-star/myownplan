@@ -150,6 +150,7 @@ Netlify builds the Vite frontend to `dist` and deploys Functions from `netlify/f
 - `goal-breakdown-regression-test.mjs`
 - `planner-snapshots-regression-test.mjs`
 - `cloud-compare-regression-test.mjs`
+- `ai-status-regression-test.mjs`
 - `planning-memory-regression-test.mjs`
 - `day-modes-regression-test.mjs`
 - `work-signals-regression-test.mjs`

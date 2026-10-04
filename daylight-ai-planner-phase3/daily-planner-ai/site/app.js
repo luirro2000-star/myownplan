@@ -234,6 +234,8 @@ if(!messages.length)messages=[{ id:'hello', role:'assistant', text:"Tell me what
 let accountUser = null
 let accountStatus = 'Checking sign-in…'
 let accountError = ''
+let aiStatus = ''
+let aiChecking = false
 let inviteToken = ''
 let cloudCopy = null
 let cloudRevision = 0
@@ -283,7 +285,25 @@ function sidebar() {
 function accountControls() {
   if(inviteToken)return `<form class="account-box" id="invite-form"><strong>Accept invitation</strong><p>Choose a password to create your private Daylight account.</p><label for="invite-password">Password</label><input id="invite-password" type="password" autocomplete="new-password" required minlength="8"><button type="submit">Create account</button>${accountError?`<small role="alert">${esc(accountError)}</small>`:''}</form>`
   if(!accountUser)return `<form class="account-box" id="login-form"><strong>Cloud sync</strong><p>${esc(accountStatus)}</p><label for="login-email">Email</label><input id="login-email" type="email" autocomplete="username" required><label for="login-password">Password</label><input id="login-password" type="password" autocomplete="current-password" required><button type="submit">Sign in</button>${accountError?`<small role="alert">${esc(accountError)}</small>`:''}</form>`
-  return `<div class="account-box"><strong>${esc(accountUser.email||'Signed in')}</strong><p>${esc(accountStatus)}</p>${cloudCopy?`<div class="account-choice">${cloudCopy.exists?'<button data-action="use-cloud">Use cloud plan</button>':''}<button data-action="use-local">Move this device’s plan to cloud</button></div>`:''}<button class="account-quiet" data-action="sign-out">Sign out</button><button class="account-quiet danger" data-action="delete-cloud">Delete cloud copy</button>${accountError?`<small role="alert">${esc(accountError)}</small>`:''}</div>`
+  return `<div class="account-box"><strong>${esc(accountUser.email||'Signed in')}</strong><p>${esc(accountStatus)}</p>${cloudCopy?`<div class="account-choice">${cloudCopy.exists?'<button data-action="use-cloud">Use cloud plan</button>':''}<button data-action="use-local">Move this device’s plan to cloud</button></div>`:''}<button class="account-quiet" data-action="check-ai" ${aiChecking?'disabled':''}>${aiChecking?'Checking AI…':'Check AI connection'}</button>${aiStatus?`<small role="status">${esc(aiStatus)}</small>`:''}<button class="account-quiet" data-action="sign-out">Sign out</button><button class="account-quiet danger" data-action="delete-cloud">Delete cloud copy</button>${accountError?`<small role="alert">${esc(accountError)}</small>`:''}</div>`
+}
+
+async function checkAIConnection() {
+  if(aiChecking)return
+  aiChecking=true;aiStatus='';render()
+  try {
+    const response=await fetch('/api/ai-status',{method:'POST'})
+    const result=await response.json()
+    aiStatus=response.ok?'AI setup is ready. Try asking Planner a question.':{
+      missing_key:'The AI key is missing from Netlify Functions.',
+      provider_auth:'The AI provider rejected the key.',
+      provider_balance:'The AI account needs billing or usage attention.',
+      provider_model:'The selected AI model is unavailable.',
+      provider_rate_limit:'The AI provider is busy. Try again shortly.',
+      unauthorized:'Please sign in again.',
+    }[result.code]||'AI connection could not be checked right now.'
+  } catch {aiStatus='AI connection could not be checked right now.'}
+  finally {aiChecking=false;render()}
 }
 
 function cloudPayload() {
@@ -372,7 +392,7 @@ async function acceptAccountInvite(event) {
 async function signOut() {
   clearTimeout(cloudSaveTimer);cloudReady=false
   try {await logout()} catch(error){accountError=error.message||'Sign out failed.';render();return}
-  accountUser=null;cloudCopy=null;cloudRevision=0;lastSyncedPayload='';cloudSnapshots=null;snapshotNotice='';accountStatus='Sign in with your invitation to sync across devices.';accountError='';render()
+  accountUser=null;cloudCopy=null;cloudRevision=0;lastSyncedPayload='';cloudSnapshots=null;snapshotNotice='';aiStatus='';accountStatus='Sign in with your invitation to sync across devices.';accountError='';render()
 }
 async function deleteCloudCopy() {
   if(!confirm('Delete your cloud plan and saved history? The plan on this device will remain. This cannot be undone.'))return
@@ -610,6 +630,7 @@ function bindEvents() {
   document.querySelector('#login-form')?.addEventListener('submit',signIn)
   document.querySelector('#invite-form')?.addEventListener('submit',acceptAccountInvite)
   document.querySelector('[data-action="sign-out"]')?.addEventListener('click',signOut)
+  document.querySelector('[data-action="check-ai"]')?.addEventListener('click',checkAIConnection)
   document.querySelector('[data-action="delete-cloud"]')?.addEventListener('click',deleteCloudCopy)
   document.querySelector('[data-action="use-cloud"]')?.addEventListener('click',()=>{if(!cloudCopy?.exists)return;if(!confirm('Use the cloud plan on this device? Your current device plan will be replaced. Export a backup first if you want to keep it.'))return;applyCloudCopy(cloudCopy);render()})
   document.querySelector('[data-action="use-local"]')?.addEventListener('click',()=>{if(cloudCopy?.exists&&!confirm('Replace the cloud plan with this device’s plan? The previous cloud plan will be replaced.'))return;saveToCloud(true).then(()=>render())})
