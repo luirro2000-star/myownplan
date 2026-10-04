@@ -451,7 +451,12 @@ async function restoreCloudSnapshot(revision) {
     cloudRevision=result.revision;lastSyncedPayload=JSON.stringify(cloudPayload());cloudReady=true
     accountStatus='Synced across your devices';accountError='';cloudSnapshots=null
     snapshotNotice=`Version ${revision} restored. Use Undo to return to the plan you had before.`
-  } catch(error){cloudReady=true;snapshotNotice=error.message||'This version could not be restored.'}
+  } catch(error){
+    snapshotNotice=error.message||'The restore result could not be confirmed.'
+    // A gateway can fail after the transaction succeeds. Re-read the account
+    // before allowing another save, so an uncertain result cannot be overwritten.
+    await loadCloudCopy()
+  }
   finally {snapshotBusy=false;render()}
 }
 function navButton(id, icon, label) { return `<button class="nav-item ${view===id?'active':''}" data-view="${id}"><span class="icon">${icon}</span>${label}</button>` }
@@ -1028,7 +1033,7 @@ async function sendMessage(explicit='') {
   try {
     const history=messages.slice(-9,-1).filter(m=>m.id!=='hello'&&(m.role==='user'||(m.role==='assistant'&&!m.error))).map(m=>({role:m.role,text:m.text}))
     const message=answering?`Answer to your earlier question "${answering.text}": ${text}`:text
-    const res=await accountFetch('/api/assistant',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message,history,selectedDay,now:new Date().toISOString(),state})})
+    const res=await accountFetch('/api/assistant',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message,history,selectedDay,todayDay:new Intl.DateTimeFormat('en-US',{weekday:'long'}).format(new Date()),now:new Date().toISOString(),state})})
     if(!res.ok) throw await apiError(res)
     const data=await res.json(); messages.push({id:uid(),role:'assistant',text:data.reply,proposals:data.proposals,questions:data.questions});speakReply(data.reply)
     if(answering){pushUndo('Answered a question');state.questions=resolveQuestion(state.questions,answering.id,'answered');activeQuestionId=null}

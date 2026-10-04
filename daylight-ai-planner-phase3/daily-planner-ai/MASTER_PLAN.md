@@ -559,3 +559,9 @@ Next: summarize recurring duration and skip patterns, then let the user explicit
 - The Account panel can check the server-side Anthropic key and selected model without sending planner details or conversation.
 - The check is manual, signed-in, and origin protected. It provides clear setup errors while keeping the key server-side.
 - The live preview accepted the key and selected model. A successful setup check does not replace a live planning reply test.
+
+### Checkpoint 4K — conversational AI and session recovery (verified on preview 2026-10-04)
+
+- A signed-in live AI request returned a planning tip without changing the schedule, and cloud sync stayed active.
+- Account-protected requests refresh the browser session and report unexpected server responses clearly. The assistant receives the user's local weekday so it does not treat a future day's blocks as past.
+- Cloud restore now has an in-app confirmation and checks cloud state after an uncertain response. The final live restore/Undo check remains pending because an older browser confirmation stalled browser interaction.

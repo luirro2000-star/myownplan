@@ -29,10 +29,12 @@ try {
     sent=JSON.parse(options.body)
     return Response.json({content:[{type:'text',text:JSON.stringify({reply:'Sure, here is a plan.',proposals:[],questions:[]})}]})
   }
-  const ok=await assistant(request({message:'What about tomorrow?',history:[{role:'assistant',text:'Initial greeting'},{role:'user',text:'Help me plan'},{role:'assistant',text:'Sure'}],state:{items:[]},selectedDay:'Thursday',now:'2026-10-01T14:00:00Z'}))
+  const ok=await assistant(request({message:'What about tomorrow?',history:[{role:'assistant',text:'Initial greeting'},{role:'user',text:'Help me plan'},{role:'assistant',text:'Sure'}],state:{items:[]},selectedDay:'Thursday',todayDay:'Wednesday',now:'2026-10-01T14:00:00Z'}))
   assert.equal(ok.status,200)
   assert.equal((await ok.json()).reply,'Sure, here is a plan.')
   assert.deepEqual(sent.messages,[{role:'user',content:'Help me plan'},{role:'assistant',content:'Sure'},{role:'user',content:'What about tomorrow?'}])
+  assert.match(sent.system,/Selected day: Thursday\nCurrent local weekday: Wednesday/)
+  assert.match(sent.system,/Never describe a selected day's blocks as underway or over when it is not the current weekday/)
   assert.equal(hasUnsupportedNumberConstraint(sent.output_config.format.schema),false)
 
   await intake(request({text:'I need to finish a project tomorrow.',state:{}}))
