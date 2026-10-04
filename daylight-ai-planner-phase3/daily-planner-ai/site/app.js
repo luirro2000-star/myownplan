@@ -246,6 +246,7 @@ let cloudSaveQueued = false
 let lastSyncedPayload = ''
 let cloudSnapshots = null
 let snapshotBusy = false
+let snapshotConfirmRevision = null
 let snapshotNotice = ''
 let accountPanelOpen = !window.matchMedia('(max-width: 900px)').matches
 
@@ -423,7 +424,7 @@ async function deleteCloudCopy() {
 }
 async function loadCloudSnapshots() {
   if(!accountUser||!cloudReady||snapshotBusy)return
-  snapshotBusy=true;snapshotNotice='';render()
+  snapshotBusy=true;snapshotNotice='';snapshotConfirmRevision=null;render()
   try {
     const response=await accountFetch('/api/planner-snapshots',{cache:'no-store'})
     if(!response.ok)throw new Error('Earlier cloud versions are unavailable right now.')
@@ -435,8 +436,8 @@ async function loadCloudSnapshots() {
 async function restoreCloudSnapshot(revision) {
   if(!accountUser||!cloudReady||cloudSaving||snapshotBusy)return
   const chosen=cloudSnapshots?.find(entry=>entry.revision===revision)
-  if(!chosen||revision===cloudRevision)return
-  if(!confirm(`Restore cloud version ${revision} from ${new Date(chosen.createdAt).toLocaleString()}? Your current planner will be saved in Undo.`))return
+  if(!chosen||revision===cloudRevision||snapshotConfirmRevision!==revision)return
+  snapshotConfirmRevision=null
   const nextHistory=[...undoStack,{label:`Before restoring cloud version ${revision}`,at:new Date().toISOString(),state:clone(state)}].slice(-HISTORY_LIMIT)
   clearTimeout(cloudSaveTimer);cloudReady=false;snapshotBusy=true;snapshotNotice='Restoring your plan…';render()
   try {
@@ -548,7 +549,7 @@ function historyView() {
     <section class="undo-history"><div class="mini-label">UNDO POINTS</div>
     ${undoStack.length?`<div class="history-list">${undoStack.slice().reverse().map((entry,index)=>`<div class="history-entry"><div><strong>${esc(entry.label)}</strong><time>${esc(entry.at?new Date(entry.at).toLocaleString():'Earlier')}</time></div>${index===0?'<button class="secondary-button" data-action="undo-history">Undo this change</button>':''}</div>`).join('')}</div>`:'<div class="empty-state">No planner changes yet.</div>'}
     </section>
-    ${accountUser?`<section class="cloud-history"><div class="section-head"><div><div class="mini-label">CLOUD RECOVERY</div><h2>Earlier cloud versions</h2></div><button class="secondary-button" data-action="load-snapshots" ${!cloudReady||snapshotBusy?'disabled':''}>${snapshotBusy?'Please wait…':cloudSnapshots?'Refresh versions':'Show versions'}</button></div><p>Restore a saved planner version from this account. Your current plan remains available through Undo.</p>${snapshotNotice?`<p class="snapshot-notice" role="status">${esc(snapshotNotice)}</p>`:''}${cloudSnapshots?.length?`<div class="history-list">${cloudSnapshots.map(entry=>`<div class="history-entry"><div><strong>${esc(entry.label||'Saved planner')}</strong><time>${esc(new Date(entry.createdAt).toLocaleString())} · version ${entry.revision}</time></div><button class="secondary-button" data-restore-snapshot="${entry.revision}" ${!cloudReady||snapshotBusy||entry.revision===cloudRevision?'disabled':''}>${entry.revision===cloudRevision?'Current':'Restore'}</button></div>`).join('')}</div>`:''}</section>`:''}
+    ${accountUser?`<section class="cloud-history"><div class="section-head"><div><div class="mini-label">CLOUD RECOVERY</div><h2>Earlier cloud versions</h2></div><button class="secondary-button" data-action="load-snapshots" ${!cloudReady||snapshotBusy?'disabled':''}>${snapshotBusy?'Please wait…':cloudSnapshots?'Refresh versions':'Show versions'}</button></div><p>Restore a saved planner version from this account. Your current plan remains available through Undo.</p>${snapshotNotice?`<p class="snapshot-notice" role="status">${esc(snapshotNotice)}</p>`:''}${snapshotConfirmRevision!==null?`<div class="restore-confirm" role="group" aria-label="Confirm cloud restore"><strong>Restore version ${snapshotConfirmRevision}?</strong><p>The current planner will be saved in Undo before this version replaces it.</p><button class="secondary-button" data-action="cancel-restore">Keep current plan</button><button class="reality-button" data-action="confirm-restore">Restore version ${snapshotConfirmRevision}</button></div>`:''}${cloudSnapshots?.length?`<div class="history-list">${cloudSnapshots.map(entry=>`<div class="history-entry"><div><strong>${esc(entry.label||'Saved planner')}</strong><time>${esc(new Date(entry.createdAt).toLocaleString())} · version ${entry.revision}</time></div><button class="secondary-button" data-restore-snapshot="${entry.revision}" ${!cloudReady||snapshotBusy||entry.revision===cloudRevision?'disabled':''}>${entry.revision===cloudRevision?'Current':'Restore'}</button></div>`).join('')}</div>`:''}</section>`:''}
   </div>`
 }
 function goalCard(g){
@@ -674,7 +675,9 @@ function bindEvents() {
   document.querySelector('[data-action="undo"]')?.addEventListener('click',undoLast)
   document.querySelector('[data-action="undo-history"]')?.addEventListener('click',undoLast)
   document.querySelector('[data-action="load-snapshots"]')?.addEventListener('click',loadCloudSnapshots)
-  document.querySelectorAll('[data-restore-snapshot]').forEach(el=>el.addEventListener('click',()=>restoreCloudSnapshot(Number(el.dataset.restoreSnapshot))))
+  document.querySelectorAll('[data-restore-snapshot]').forEach(el=>el.addEventListener('click',()=>{snapshotConfirmRevision=Number(el.dataset.restoreSnapshot);render()}))
+  document.querySelector('[data-action="cancel-restore"]')?.addEventListener('click',()=>{snapshotConfirmRevision=null;render()})
+  document.querySelector('[data-action="confirm-restore"]')?.addEventListener('click',()=>restoreCloudSnapshot(snapshotConfirmRevision))
   document.querySelector('[data-action="export-backup"]')?.addEventListener('click',exportBackup)
   document.querySelector('#import-backup')?.addEventListener('change',importBackup)
   document.querySelector('[data-action="chat-toggle"]')?.addEventListener('click',()=>{stopVoice();chatOpen=!chatOpen;render()})

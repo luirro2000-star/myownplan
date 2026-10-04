@@ -172,6 +172,10 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
 .cloud-history .section-head h2 { margin: 5px 0; font-size: 18px; }
 .cloud-history > p { color: #77776e; font-size: 11px; line-height: 1.5; }
 .cloud-history .snapshot-notice { border-radius: 8px; background: #f2f1e9; color: #5a594f; padding: 10px 12px; }
+.restore-confirm { margin: 12px 0; padding: 14px; border: 1px solid #aaa78f; border-radius: 10px; background: #faf9f1; }
+.restore-confirm strong { display: block; margin-bottom: 5px; }
+.restore-confirm p { margin: 0 0 12px; color: #5a594f; line-height: 1.5; }
+.restore-confirm button { margin: 0 8px 8px 0; }
 @media (max-width: 1280px) {
   .quick-add { margin-left: 34px; margin-right: 34px; }
   body { min-width: 1020px; }
