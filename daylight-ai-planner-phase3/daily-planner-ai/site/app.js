@@ -23,7 +23,7 @@ import { finishWork, reopenWork, skipWork, resumeWork, setActualTime } from './w
 import { durationSuggestion } from './duration-learning.js'
 import { workPattern } from './work-patterns.js'
 import { sameCloudPayload } from './cloud-compare.js'
-import { getUser, login, logout, handleAuthCallback, acceptInvite } from '@netlify/identity'
+import { getUser, login, logout, handleAuthCallback, acceptInvite, refreshSession } from '@netlify/identity'
 
 const STORAGE_KEY = 'daylight-planner-v03-static'
 const LEGACY_STORAGE_KEY = 'daylight-planner-v02-static'
@@ -292,8 +292,8 @@ async function checkAIConnection() {
   if(aiChecking)return
   aiChecking=true;aiStatus='';render()
   try {
-    const response=await fetch('/api/ai-status',{method:'POST'})
-    const result=await response.json()
+    const response=await accountFetch('/api/ai-status',{method:'POST'})
+    const result=await responseData(response)
     aiStatus=response.ok?'AI setup is ready. Try asking Planner a question.':{
       missing_key:'The AI key is missing from Netlify Functions.',
       provider_auth:'The AI provider rejected the key.',
@@ -304,6 +304,24 @@ async function checkAIConnection() {
     }[result.code]||'AI connection could not be checked right now.'
   } catch {aiStatus='AI connection could not be checked right now.'}
   finally {aiChecking=false;render()}
+}
+
+async function accountFetch(url,options={}) {
+  // A browser tab can retain a signed-in user after its server cookie expires.
+  // Refresh before protected calls, then retry once if the server rejects it.
+  try {await refreshSession()} catch { /* The request below will report the server's result. */ }
+  let response=await fetch(url,options)
+  if(response.status===401){
+    try {await refreshSession()} catch {return response}
+    response=await fetch(url,options)
+  }
+  return response
+}
+async function responseData(response) {
+  const contentType=response.headers.get('content-type')||''
+  if(!contentType.toLowerCase().includes('application/json'))throw Object.assign(new Error(`The cloud service returned an unexpected response (${response.status}). Your plan is still saved on this device.`),{status:response.status})
+  try {return await response.json()}
+  catch {throw Object.assign(new Error(`The cloud service returned unreadable data (${response.status}). Your plan is still saved on this device.`),{status:response.status})}
 }
 
 function cloudPayload() {
@@ -324,8 +342,8 @@ async function saveToCloud(force=false) {
   cloudSaving=true
   const payload={...snapshot,expectedRevision:cloudRevision,force,label:undoStack.at(-1)?.label||'Saved planner'}
   try {
-    const response=await fetch('/api/planner-state',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(payload)})
-    const result=await response.json()
+    const response=await accountFetch('/api/planner-state',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(payload)})
+    const result=await responseData(response)
     if(response.status===409){cloudReady=false;accountStatus='Another device changed your plan. Choose which copy to keep.';accountError='Automatic sync paused to protect your changes.';await loadCloudCopy()}
     else if(!response.ok)throw new Error(result.error||'Cloud save failed. Your changes are still saved on this device.')
     else {cloudRevision=result.revision;lastSyncedPayload=snapshotText;cloudCopy=null;cloudReady=true;accountStatus='Synced across your devices';accountError='';renderAccountStatus();if(JSON.stringify(cloudPayload())!==snapshotText)cloudSaveQueued=true}
@@ -336,9 +354,9 @@ function renderAccountStatus(){const box=document.querySelector('.account-box');
 async function loadCloudCopy() {
   accountStatus='Checking your cloud plan…';accountError='';render()
   try {
-    const response=await fetch('/api/planner-state',{cache:'no-store'})
+    const response=await accountFetch('/api/planner-state',{cache:'no-store'})
     if(!response.ok)throw new Error(response.status===401?'Please sign in again.':'Cloud storage is temporarily unavailable.')
-    const remote=await response.json()
+    const remote=await responseData(response)
     if(!remote.exists){cloudCopy={exists:false};cloudRevision=0;accountStatus='Your plan is saved on this device. Move it to cloud to sync.'}
     else {
       cloudRevision=remote.revision
@@ -366,6 +384,7 @@ async function initializeAccount() {
     const callback=await handleAuthCallback()
     if(callback?.type==='invite'&&callback.token){inviteToken=callback.token;accountStatus='Complete your invitation';render();return}
     accountUser=await getUser()
+    if(accountUser)try {await refreshSession()} catch { /* Cloud request will report a session problem. */ }
     if(accountUser)await loadCloudCopy()
     else accountStatus='Sign in with your invitation to sync across devices.'
   } catch(error){accountStatus='Cloud sign-in is available on the deployed Netlify site.';accountError=error.message||''}
@@ -397,7 +416,7 @@ async function signOut() {
 async function deleteCloudCopy() {
   if(!confirm('Delete your cloud plan and saved history? The plan on this device will remain. This cannot be undone.'))return
   try {
-    const response=await fetch('/api/planner-state',{method:'DELETE'})
+    const response=await accountFetch('/api/planner-state',{method:'DELETE'})
     if(!response.ok)throw new Error('Cloud copy could not be deleted. Please try again.')
     cloudReady=false;cloudCopy={exists:false};cloudRevision=0;lastSyncedPayload='';accountStatus='Cloud copy deleted. Your plan is still on this device.';accountError='';render()
   } catch(error){accountError=error.message;renderAccountStatus()}
@@ -406,9 +425,9 @@ async function loadCloudSnapshots() {
   if(!accountUser||!cloudReady||snapshotBusy)return
   snapshotBusy=true;snapshotNotice='';render()
   try {
-    const response=await fetch('/api/planner-snapshots',{cache:'no-store'})
+    const response=await accountFetch('/api/planner-snapshots',{cache:'no-store'})
     if(!response.ok)throw new Error('Earlier cloud versions are unavailable right now.')
-    cloudSnapshots=(await response.json()).snapshots||[]
+    cloudSnapshots=(await responseData(response)).snapshots||[]
     snapshotNotice=cloudSnapshots.length?'Choose a version to restore. Your current plan will remain available through Undo.':'No earlier cloud versions yet.'
   } catch(error){snapshotNotice=error.message}
   finally {snapshotBusy=false;render()}
@@ -421,8 +440,8 @@ async function restoreCloudSnapshot(revision) {
   const nextHistory=[...undoStack,{label:`Before restoring cloud version ${revision}`,at:new Date().toISOString(),state:clone(state)}].slice(-HISTORY_LIMIT)
   clearTimeout(cloudSaveTimer);cloudReady=false;snapshotBusy=true;snapshotNotice='Restoring your plan…';render()
   try {
-    const response=await fetch('/api/planner-snapshots',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({revision,expectedRevision:cloudRevision,history:nextHistory})})
-    const result=await response.json()
+    const response=await accountFetch('/api/planner-snapshots',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({revision,expectedRevision:cloudRevision,history:nextHistory})})
+    const result=await responseData(response)
     if(response.status===409){snapshotNotice='Another device changed your plan. Choose which copy to keep before restoring.';await loadCloudCopy();return}
     if(!response.ok)throw new Error('This version could not be restored. Your current plan is unchanged.')
     state=migrate(result.state);undoStack=nextHistory;goalDraft=null;intakeDraft=null;intakeCaptureId=null
@@ -737,7 +756,7 @@ async function suggestGoalBreakdown(kind,id){
   render()
   if(!accountUser)return
   try {
-    const response=await fetch('/api/goal-breakdown',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({kind,title:target.title,details})})
+    const response=await accountFetch('/api/goal-breakdown',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({kind,title:target.title,details})})
     if(!response.ok)throw await apiError(response)
     if(goalDraft?.id===id&&goalDraft.kind===kind){goalDraft.data=normalizeGoalBreakdown(await response.json(),target.title);goalDraft.notice='Review these suggestions. Saving a roadmap does not schedule anything.'}
   } catch {
@@ -959,7 +978,7 @@ async function analyzeIntake(){
   intakeSending=true; render()
   let source='anthropic'
   try{
-    const res=await fetch('/api/intake',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:brainDumpText,state,now:new Date().toISOString()})})
+    const res=await accountFetch('/api/intake',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:brainDumpText,state,now:new Date().toISOString()})})
     if(!res.ok)throw new Error(await res.text())
     intakeDraft=normalizeIntakeAnalysis(await res.json())
   }catch(err){
@@ -1006,7 +1025,7 @@ async function sendMessage(explicit='') {
   try {
     const history=messages.slice(-9,-1).filter(m=>m.id!=='hello'&&(m.role==='user'||(m.role==='assistant'&&!m.error))).map(m=>({role:m.role,text:m.text}))
     const message=answering?`Answer to your earlier question "${answering.text}": ${text}`:text
-    const res=await fetch('/api/assistant',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message,history,selectedDay,now:new Date().toISOString(),state})})
+    const res=await accountFetch('/api/assistant',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message,history,selectedDay,now:new Date().toISOString(),state})})
     if(!res.ok) throw await apiError(res)
     const data=await res.json(); messages.push({id:uid(),role:'assistant',text:data.reply,proposals:data.proposals,questions:data.questions});speakReply(data.reply)
     if(answering){pushUndo('Answered a question');state.questions=resolveQuestion(state.questions,answering.id,'answered');activeQuestionId=null}
