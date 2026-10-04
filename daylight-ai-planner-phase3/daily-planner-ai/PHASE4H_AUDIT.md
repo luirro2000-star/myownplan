@@ -17,8 +17,10 @@ Repair the account session after an invited user creates their account on the De
 - `npm test` passed all existing suites.
 - `npm run build` passed outside the restricted sandbox; the sandbox itself blocks Vite's Windows child process with `spawn EPERM`.
 - `git diff --check` passed.
+- Netlify completed Deploy Preview #1 at commit `ce17487`; the production deploy is still `c7efff7`.
+- The preview loads the updated app and presents the existing account's sign-in form. Netlify Identity lists the invited address as a registered user.
 
 ## Pending live checks
 
-- Deploy this commit to the draft preview and have the account owner sign in once using the password they chose. Confirm cloud status reaches “Synced across your devices.”
+- Have the account owner sign in once using the password they chose. Confirm cloud status reaches “Synced across your devices.”
 - Then check a disposable cloud save and AI response, followed by the remaining account-backed recovery flows. Do not publish production until those checks pass.
