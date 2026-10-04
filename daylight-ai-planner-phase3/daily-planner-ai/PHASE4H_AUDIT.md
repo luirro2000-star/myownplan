@@ -20,7 +20,7 @@ Repair the account session after an invited user creates their account on the De
 - Netlify completed Deploy Preview #1 at commit `ce17487`; the production deploy is still `c7efff7`.
 - The preview loads the updated app and presents the existing account's sign-in form. Netlify Identity lists the invited address as a registered user.
 
-## Pending live checks
+## Live result and remaining checks
 
-- Have the account owner sign in once using the password they chose. Confirm cloud status reaches “Synced across your devices.”
-- Then check a disposable cloud save and AI response, followed by the remaining account-backed recovery flows. Do not publish production until those checks pass.
+- The account owner signed in. The preview displayed “Synced across your devices,” and the session survived a reload. The reload exposed a false plan-choice prompt caused by JSONB key order; checkpoint 4I repaired and verified it.
+- A disposable cloud save and Undo passed in checkpoint 4I. An AI response and server snapshot restoration remain to be checked. Do not publish production until those checks pass.

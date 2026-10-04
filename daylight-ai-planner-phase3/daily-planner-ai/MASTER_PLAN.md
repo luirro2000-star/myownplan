@@ -540,3 +540,16 @@ Next: summarize recurring duration and skip patterns, then let the user explicit
 - Assistant and brain-dump AI requests now use the same signed-in origin check already used by goal breakdown and cloud write operations.
 - Both endpoints reject oversized request bodies before parsing and sending data to the AI provider. The assistant message and brain-dump text also have explicit length limits.
 - Account sign-in and an actual provider request are still required to verify that the live preview's AI connection succeeds end to end.
+
+### Checkpoint 4H — invitation sign-in (verified on preview 2026-10-04)
+
+- Invitation acceptance now completes a normal sign-in so Netlify Functions receive the Identity cookie needed for account-scoped requests.
+- The invited owner signed in and Daylight displayed “Synced across your devices.” The session survived a full page reload.
+- Production remains on checkpoint 4A while the draft preview is audited.
+
+### Checkpoint 4I — cloud comparison (verified on preview 2026-10-04)
+
+- Cloud data is compared by content, ignoring PostgreSQL JSONB object-key order. A reload no longer raises a false local-versus-cloud choice.
+- The comparison covers planner state, Undo history, and conversation. Actual differences still require an explicit choice.
+- A temporary task saved as cloud version 2; Undo removed it and saved version 3. The owner plan no longer contains the test task.
+- A live AI-provider request and server snapshot restoration remain to be checked before production release.
