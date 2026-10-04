@@ -22,6 +22,7 @@ import { DAY_MODES, MODE_LABELS, MODE_HINTS, modeForDay, configForDayModes } fro
 import { finishWork, reopenWork, skipWork, resumeWork, setActualTime } from './work-signals.js'
 import { durationSuggestion } from './duration-learning.js'
 import { workPattern } from './work-patterns.js'
+import { sameCloudPayload } from './cloud-compare.js'
 import { getUser, login, logout, handleAuthCallback, acceptInvite } from '@netlify/identity'
 
 const STORAGE_KEY = 'daylight-planner-v03-static'
@@ -322,7 +323,7 @@ async function loadCloudCopy() {
     else {
       cloudRevision=remote.revision
       const localExists=!!localStorage.getItem(STORAGE_KEY)
-      if(!localExists || JSON.stringify(state)===JSON.stringify(remote.state))applyCloudCopy(remote)
+      if(!localExists || sameCloudPayload(cloudPayload(),{state:remote.state,history:remote.history,conversation:remote.conversation}))applyCloudCopy(remote)
       else {cloudCopy=remote;accountStatus='A cloud plan and a different plan on this device were found. Choose which to keep.'}
     }
   } catch(error){accountStatus='Your plan remains saved on this device.';accountError=error.message}
