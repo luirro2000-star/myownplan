@@ -15,7 +15,8 @@ Verify an actual signed-in AI conversation in the draft preview and make cloud r
 
 ## Verification
 
-- `npm test`, `npm run build`, and `git diff --check` passed after all changes. The weekday prompt has a regression assertion; its live reply is pending deployment.
+- `npm test`, `npm run build`, and `git diff --check` passed after all changes. The weekday prompt has a regression assertion; a new live reply with that prompt has not been requested.
 - Deploy Preview #1 served commit `ce25962`. The signed-in **Check AI connection** action passed, and a real AI conversation returned a tip without changing the schedule. A subsequent cloud save displayed “Synced across your devices.”
-- Deploy Preview #1 served commit `10386ff` with the in-app restore confirmation. The signed-in plan loaded after a full reload, but an older tab's browser confirmation stalled interaction before the new restore flow could be exercised. A backup was downloaded before the test. Live restore and Undo remain unverified.
+- The user accepted the earlier browser confirmation. Version 2 restored successfully as cloud version 6 and displayed its dedicated Undo point. Undo removed the temporary task and saved cloud version 7. The Monday plan again showed six blocks with no temporary task, and a full reload on another preview tab returned “Synced across your devices” without a conflict.
+- Deploy Preview #1 served commit `ca55165` with the new in-app restore confirmation. Selecting version 3 displayed both “Keep current plan” and “Restore version 3”; keeping the current plan left version 7 marked Current. This verifies the new confirmation and cancel flow without changing the recovered plan.
 - Production remains on checkpoint 4A. The draft preview has not been merged.

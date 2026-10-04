@@ -564,4 +564,4 @@ Next: summarize recurring duration and skip patterns, then let the user explicit
 
 - A signed-in live AI request returned a planning tip without changing the schedule, and cloud sync stayed active.
 - Account-protected requests refresh the browser session and report unexpected server responses clearly. The assistant receives the user's local weekday so it does not treat a future day's blocks as past.
-- Cloud restore now has an in-app confirmation and checks cloud state after an uncertain response. The final live restore/Undo check remains pending because an older browser confirmation stalled browser interaction.
+- Cloud restore now has an in-app confirmation and checks cloud state after an uncertain response. Live restore and Undo both succeeded: the temporary test task was removed again, version 7 is current, and a full reload stayed synced. The new in-app confirmation and its cancel action were verified on the preview.
