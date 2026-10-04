@@ -16,4 +16,5 @@ Give the account owner a private, low-data way to check whether the Netlify AI s
 
 - Regression checks cover sign-in, origin rejection, absent key, model request without planner data, and unavailable model.
 - `npm test`, `npm run build`, and `git diff --check` passed.
-- Live check on the Deploy Preview remains pending. Production remains on checkpoint 4A.
+- Deploy Preview #1 served commit `370cd47`. The signed-in Account panel displayed “AI setup is ready. Try asking Planner a question.” after the live key-and-model check. The actual conversation endpoint remains untested with this account.
+- Production remains on checkpoint 4A.

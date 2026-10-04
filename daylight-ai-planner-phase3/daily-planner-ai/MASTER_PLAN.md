@@ -554,8 +554,8 @@ Next: summarize recurring duration and skip patterns, then let the user explicit
 - A temporary task saved as cloud version 2; Undo removed it and saved version 3. The owner plan no longer contains the test task.
 - A live AI-provider request and server snapshot restoration remain to be checked before production release.
 
-### Checkpoint 4J — private AI setup check (implemented locally 2026-10-04)
+### Checkpoint 4J — private AI setup check (verified on preview 2026-10-04)
 
 - The Account panel can check the server-side Anthropic key and selected model without sending planner details or conversation.
 - The check is manual, signed-in, and origin protected. It provides clear setup errors while keeping the key server-side.
-- A successful setup check does not replace a live planning reply test.
+- The live preview accepted the key and selected model. A successful setup check does not replace a live planning reply test.
