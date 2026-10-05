@@ -35,4 +35,10 @@ Make Daylight's core planner paths understandable and operable with a keyboard a
 - Verify color contrast and zoom/reflow across every secondary review and history state.
 - Test installation, offline transitions, microphone permission, and touch behavior on physical iOS and Android devices.
 
-Production remains on checkpoint 4A. Checkpoint 9C will be verified on the draft preview before it is considered release-ready.
+## Draft preview
+
+- Netlify processed draft commit `94ea377` in Preview 1.
+- The deployed page exposed **Skip to planner**, a **Planner sections** navigation landmark, **Today** as the current page, and task-specific names on all six visible completion controls.
+- The shipped stylesheet contained the visible `:focus-visible` rule and `prefers-reduced-motion` override.
+
+Production remains on checkpoint 4A. Checkpoint 9C is preview-verified; physical-device and screen-reader checks remain release gates.

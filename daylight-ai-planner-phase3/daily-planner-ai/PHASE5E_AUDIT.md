@@ -30,4 +30,10 @@ Complete the adaptive-planning feedback loop with a useful completion signal tha
 - A repeated title is only a practical proxy for the same kind of work. Context, difficulty, health, deadlines, and actual start time are not yet modeled.
 - The percentage is a transparent personal-history signal, not a calibrated prediction. Real longitudinal data is required before any stronger claim.
 
-Production remains on checkpoint 4A. Checkpoint 5E will be checked on the draft preview before release.
+## Draft preview
+
+- Netlify processed draft commit `94ea377` in Preview 1.
+- The deployed JavaScript contained the completion-outlook label and explicit **not a guarantee** explanation; the deployed stylesheet contained all three outlook presentation states.
+- Existing user planner data was not changed to manufacture five matching attempts on the account. The end-to-end history scenario remained isolated to a clean local browser origin.
+
+Production remains on checkpoint 4A. Checkpoint 5E is preview-verified; real longitudinal data remains a release-learning requirement.

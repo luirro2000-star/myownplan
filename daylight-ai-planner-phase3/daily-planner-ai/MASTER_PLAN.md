@@ -529,12 +529,13 @@ Next: summarize recurring duration and skip patterns, then let the user explicit
 - **Prefer morning/afternoon/evening** applies the window only to the chosen unfinished flexible block, then runs deterministic planning. **Ignore this suggestion** persists until **Show again** in History. Undo covers both actions.
 - Scheduled start time is not evidence of when work actually began. Calendar dates, recurrence, and stronger adaptive signals remain later work.
 
-### Checkpoint 5E — completion outlook (implemented locally 2026-10-04)
+### Checkpoint 5E — completion outlook (verified on preview 2026-10-04)
 
 - After five matching finished/skipped attempts, an unfinished flexible block can show a completion outlook based on up to twelve recent attempts.
 - The signal uses light smoothing so small histories never display misleading 0% or 100% certainty. It names the number finished, skipped, and observed, and explicitly says the outlook is not a guarantee.
 - **Promising**, **Mixed**, and **May need support** provide a quick non-typing cue. The signal never changes duration, priority, preferred time, or schedule automatically.
 - Unit tests cover minimum evidence, all three outlook levels, title matching, and the twelve-attempt recency window. Browser testing reproduced a mixed 55% outlook from three finishes and two skips.
+- Deploy Preview 1 served the new completion-outlook code and styles at commit `94ea377` while production remained unchanged.
 
 This completes the locally planned Milestone 5 learning loop: observations, duration recommendations, preferred-window suggestions, completion signals, day modes, and explicit user control. Longer-term validation still requires real usage over calendar dates.
 
@@ -552,13 +553,14 @@ This completes the locally planned Milestone 5 learning loop: observations, dura
 - A local end-to-end test loaded Daylight with its server stopped, added a task, and preserved that task through another offline reload.
 - Deploy Preview 1 served the manifest and service worker with the expected offline fallback and network-only API exclusions. Production remains on checkpoint 4A.
 
-### Checkpoint 9C — keyboard and assistive-control baseline (implemented locally 2026-10-04)
+### Checkpoint 9C — keyboard and assistive-control baseline (verified on preview 2026-10-04)
 
 - Keyboard users can reveal a **Skip to planner** link, and all interactive controls receive a strong visible focus ring.
 - Primary navigation exposes the current section, weekday choices expose their pressed state, and task completion controls announce the task and intended action instead of only a circle or checkmark.
 - Planner chat, brain-dump input, assistant open/close state, and goal progress now have programmatic names or values for assistive technology.
 - Reduced-motion preferences suppress nonessential transitions and the loading spinner animation.
 - The production build passed automated regression tests plus manual keyboard and accessibility-tree checks. A broader screen-reader and physical-device test matrix remains part of release readiness.
+- Deploy Preview 1 exposed the skip link, labeled navigation, current-page state, task-specific completion labels, focus styling, and reduced-motion rule at commit `94ea377`.
 
 ### Checkpoint 4G — AI endpoint safeguards (implemented locally 2026-10-03)
 
