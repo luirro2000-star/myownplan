@@ -36,3 +36,20 @@ export function workPattern(workLog, title, choices = [], currentWindow = null) 
   }
   return { attempts: attempts.length, completed: completed.length, skipped, preferred }
 }
+
+export function completionOutlook(workLog, title) {
+  const titleKey = durationTitleKey(title)
+  if (!titleKey) return null
+  const attempts = (Array.isArray(workLog) ? workLog : [])
+    .filter(entry => durationTitleKey(entry.title) === titleKey && ['completed', 'skipped'].includes(entry.outcome))
+    .slice(-12)
+  if (attempts.length < 5) return null
+  const completed = attempts.filter(entry => entry.outcome === 'completed').length
+  const skipped = attempts.length - completed
+  // A small Beta(1,1) prior keeps short histories away from misleading 0%/100% claims.
+  const smoothedRate = (completed + 1) / (attempts.length + 2)
+  const percent = Math.round(smoothedRate * 20) * 5
+  const level = smoothedRate >= .7 ? 'promising' : smoothedRate >= .45 ? 'mixed' : 'support'
+  const strength = attempts.length >= 10 ? 'stronger' : attempts.length >= 8 ? 'growing' : 'early'
+  return { attempts: attempts.length, completed, skipped, percent, level, strength }
+}

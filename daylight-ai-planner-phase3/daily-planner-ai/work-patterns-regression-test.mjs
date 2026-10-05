@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { workPattern } from './site/work-patterns.js'
+import { workPattern, completionOutlook } from './site/work-patterns.js'
 import { planWeek } from './site/planner-engine.js'
 
 const completed = (time, title = 'Homework') => ({ title, outcome: 'completed', plannedStart: time })
@@ -15,6 +15,18 @@ assert.equal(workPattern(history, 'Homework', [], { start: '12:00', end: '18:00'
 assert.equal(workPattern([completed('09:00'), completed('16:00'), completed('19:00')], 'Homework').preferred, null)
 assert.equal(workPattern([completed('16:00'), completed('16:00'), skipped('16:00')], 'Homework').preferred, null)
 assert.equal(workPattern([completed('16:00', 'Other'), completed('16:00', 'Other'), completed('16:00', 'Other')], 'Homework'), null)
+
+assert.equal(completionOutlook(history, 'Homework'), null)
+const promising = completionOutlook([completed('09:00'), completed('09:00'), completed('09:00'), completed('09:00'), completed('09:00')], 'Homework')
+assert.deepEqual(promising, { attempts: 5, completed: 5, skipped: 0, percent: 85, level: 'promising', strength: 'early' })
+const mixed = completionOutlook([completed('09:00'), skipped('09:00'), completed('09:00'), skipped('09:00'), completed('09:00')], 'Homework')
+assert.deepEqual(mixed, { attempts: 5, completed: 3, skipped: 2, percent: 55, level: 'mixed', strength: 'early' })
+const support = completionOutlook([skipped('09:00'), skipped('09:00'), completed('09:00'), skipped('09:00'), skipped('09:00')], 'Homework')
+assert.deepEqual(support, { attempts: 5, completed: 1, skipped: 4, percent: 30, level: 'support', strength: 'early' })
+const olderIgnored = completionOutlook([completed('09:00'), completed('09:00'), ...Array.from({ length: 12 }, () => skipped('09:00'))], 'Homework')
+assert.equal(olderIgnored.completed, 0)
+assert.equal(olderIgnored.attempts, 12)
+assert.equal(olderIgnored.strength, 'stronger')
 
 const config = { dayStart: '07:00', dayEnd: '22:00', protectedFreeMinutes: { Monday: 60 }, transitionMinutes: 0 }
 const items = [

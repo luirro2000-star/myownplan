@@ -42,6 +42,7 @@ Milestone 4 planner with conversation, local recovery, and an invite-only cloud 
 - installable web app metadata and Daylight home-screen icons
 - offline app-shell loading with local planner edits preserved until reconnection
 - keyboard skip navigation, visible focus indicators, named icon controls, spoken progress values, and reduced-motion support
+- evidence-labeled completion outlooks after enough repeated finished/skipped attempts, with no automatic schedule changes
 
 ## Product architecture
 Claude interprets what the user means. It does not get final authority over time placement.

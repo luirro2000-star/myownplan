@@ -21,7 +21,7 @@ import { captureQuestions, resolveQuestion, describeOperation } from './planning
 import { DAY_MODES, MODE_LABELS, MODE_HINTS, modeForDay, configForDayModes } from './day-modes.js'
 import { finishWork, reopenWork, skipWork, resumeWork, setActualTime } from './work-signals.js'
 import { durationSuggestion } from './duration-learning.js'
-import { workPattern } from './work-patterns.js'
+import { workPattern, completionOutlook } from './work-patterns.js'
 import { sameCloudPayload } from './cloud-compare.js'
 import { getUser, login, logout, handleAuthCallback, acceptInvite, refreshSession } from '@netlify/identity'
 
@@ -515,13 +515,16 @@ function timelineItem(it) {
   const suggestion=!isFixed(it)&&!it.completed&&!it.skipped?durationSuggestion(state.workLog,it.title,it.durationMinutes,state.learningChoices):null
   const suggestionUI=suggestion?`<div class="duration-suggestion"><span>Usually ${formatMinutes(suggestion.suggestedMinutes)} after ${suggestion.sampleCount} finishes. Estimated ${formatMinutes(it.durationMinutes)} now.</span><button data-use-duration="${attr(it.id)}">Use ${formatMinutes(suggestion.suggestedMinutes)}</button><button data-ignore-duration="${attr(it.id)}">Ignore this suggestion</button></div>`:''
   const pattern=!isFixed(it)&&!it.completed&&!it.skipped?workPattern(state.workLog,it.title,state.learningChoices,it.preferredWindow):null
-  const patternUI=pattern?`<div class="work-pattern"><span>Finished ${pattern.completed} of ${pattern.attempts} recent ${esc(it.title)} attempts${pattern.skipped?` · skipped ${pattern.skipped}`:''}.</span>${pattern.preferred?`<span>${pattern.preferred.sampleCount} completed blocks were scheduled in the ${pattern.preferred.band}.</span><button data-use-window="${attr(it.id)}">Prefer ${pattern.preferred.band}</button><button data-ignore-window="${attr(it.id)}">Ignore this suggestion</button>`:''}</div>`:''
+  const outlook=!isFixed(it)&&!it.completed&&!it.skipped?completionOutlook(state.workLog,it.title):null
+  const patternUI=pattern&&(!outlook||pattern.preferred)?`<div class="work-pattern">${!outlook?`<span>Finished ${pattern.completed} of ${pattern.attempts} recent ${esc(it.title)} attempts${pattern.skipped?` · skipped ${pattern.skipped}`:''}.</span>`:''}${pattern.preferred?`<span>${pattern.preferred.sampleCount} completed blocks were scheduled in the ${pattern.preferred.band}.</span><button data-use-window="${attr(it.id)}">Prefer ${pattern.preferred.band}</button><button data-ignore-window="${attr(it.id)}">Ignore this suggestion</button>`:''}</div>`:''
+  const outlookCopy=outlook?.level==='promising'?'Promising':outlook?.level==='mixed'?'Mixed':'May need support'
+  const outlookUI=outlook?`<div class="completion-outlook ${outlook.level}" role="note" aria-label="Completion outlook for ${attr(it.title)}"><strong>${outlookCopy} outlook · about ${outlook.percent}%</strong><span>${outlook.completed} finished and ${outlook.skipped} skipped across ${outlook.attempts} recent attempts. This is an ${outlook.strength} signal, not a guarantee.</span></div>`:''
   const titleId=`item-title-${it.id}`
   const completionLabel=it.skipped?`${it.title} is skipped`:it.completed?`Mark ${it.title} incomplete`:`Mark ${it.title} complete`
   return `<article class="timeline-item ${it.kind} ${it.completed?'done':''} ${it.skipped?'skipped':''} ${it.unscheduled?'unscheduled':''}" aria-labelledby="${attr(titleId)}">
     <div class="time-col"><span>${it.skipped?'Skipped':it.start?displayTime(it.start):'Unscheduled'}</span>${it.end?`<small>${displayTime(it.end)}</small>`:''}</div>
     <button class="check ${it.completed?'checked':''}" data-toggle="${attr(it.id)}" aria-label="${attr(completionLabel)}" aria-pressed="${it.completed}" ${it.skipped?'disabled':''}>${it.completed?'✓':'○'}</button>
-    <div class="item-body"><div class="item-topline"><div><h3 id="${attr(titleId)}">${esc(it.title)}</h3><div class="item-meta">${meta.map(x=>`<span>${esc(x)}</span>`).join('')}${it.note?`<span class="needs-attention">${esc(it.note)}</span>`:''}</div></div></div>${subtasks}${feedback}${suggestionUI}${patternUI}</div>
+    <div class="item-body"><div class="item-topline"><div><h3 id="${attr(titleId)}">${esc(it.title)}</h3><div class="item-meta">${meta.map(x=>`<span>${esc(x)}</span>`).join('')}${it.note?`<span class="needs-attention">${esc(it.note)}</span>`:''}</div></div></div>${subtasks}${feedback}${suggestionUI}${patternUI}${outlookUI}</div>
   </article>`
 }
 

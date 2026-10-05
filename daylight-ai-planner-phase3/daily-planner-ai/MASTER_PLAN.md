@@ -529,6 +529,15 @@ Next: summarize recurring duration and skip patterns, then let the user explicit
 - **Prefer morning/afternoon/evening** applies the window only to the chosen unfinished flexible block, then runs deterministic planning. **Ignore this suggestion** persists until **Show again** in History. Undo covers both actions.
 - Scheduled start time is not evidence of when work actually began. Calendar dates, recurrence, and stronger adaptive signals remain later work.
 
+### Checkpoint 5E — completion outlook (implemented locally 2026-10-04)
+
+- After five matching finished/skipped attempts, an unfinished flexible block can show a completion outlook based on up to twelve recent attempts.
+- The signal uses light smoothing so small histories never display misleading 0% or 100% certainty. It names the number finished, skipped, and observed, and explicitly says the outlook is not a guarantee.
+- **Promising**, **Mixed**, and **May need support** provide a quick non-typing cue. The signal never changes duration, priority, preferred time, or schedule automatically.
+- Unit tests cover minimum evidence, all three outlook levels, title matching, and the twelve-attempt recency window. Browser testing reproduced a mixed 55% outlook from three finishes and two skips.
+
+This completes the locally planned Milestone 5 learning loop: observations, duration recommendations, preferred-window suggestions, completion signals, day modes, and explicit user control. Longer-term validation still requires real usage over calendar dates.
+
 ### Checkpoint 9A — mobile readability and touch controls (implemented locally 2026-10-03)
 
 - On narrow screens, the account form starts in a compact Cloud sync disclosure so the day is closer to the top. Invitation acceptance and unresolved cloud choices still open the disclosure.
