@@ -259,7 +259,7 @@ function render() {
   const main = view === 'today' ? todayView() : view === 'week' ? weekView() : view === 'goals' ? goalsView() : view === 'history' ? historyView() : inboxView()
   app.innerHTML = `<div class="app-shell">
     ${sidebar()}
-    <main class="main-panel">${main}</main>
+    <main class="main-panel" id="main-content" tabindex="-1">${main}</main>
     ${assistantPanel()}
   </div>`
   bindEvents()
@@ -270,7 +270,7 @@ function sidebar() {
   const inboxPending = state.inbox.filter(i => i.review?.items?.length).length
   return `<aside class="sidebar">
     <div class="brand"><span class="brand-dot"></span>Daylight <span class="phase-pill">M4</span></div>
-    <nav>
+    <nav aria-label="Planner sections">
       ${navButton('today','☀','Today')}
       ${navButton('week','▦','Week')}
       ${navButton('goals','◎','Goals')}
@@ -279,12 +279,12 @@ function sidebar() {
     </nav>
     <div class="sidebar-spacer"></div>
     <div class="connection-state ${offline?'offline':''}" role="status"><span></span>${offline?'Offline · changes stay on this device':'Online'}</div>
-    ${installPrompt?'<button class="ghost-button" data-action="install-app"><span class="icon">⇩</span> Install Daylight</button>':''}
+    ${installPrompt?'<button class="ghost-button" data-action="install-app"><span class="icon" aria-hidden="true">⇩</span> Install Daylight</button>':''}
     <details class="account-details" ${accountPanelOpen||inviteToken||cloudCopy?'open':''}><summary>${inviteToken?'Accept invitation':accountUser?'Account':'Cloud sync'}</summary>${accountControls()}</details>
     <div class="mini-label">Planning memory</div>
     <div class="rule-preview">${state.rules.length} rules · ${state.openLoops.length} open loops</div>
-    <button class="ghost-button" data-action="undo" ${undoStack.length?'':'disabled'}><span class="icon">↶</span> Undo planner change</button>
-    <button class="ghost-button" data-action="reset"><span class="icon">↺</span> Reset prototype</button>
+    <button class="ghost-button" data-action="undo" ${undoStack.length?'':'disabled'}><span class="icon" aria-hidden="true">↶</span> Undo planner change</button>
+    <button class="ghost-button" data-action="reset"><span class="icon" aria-hidden="true">↺</span> Reset prototype</button>
   </aside>`
 }
 function accountControls() {
@@ -463,7 +463,7 @@ async function restoreCloudSnapshot(revision) {
   }
   finally {snapshotBusy=false;render()}
 }
-function navButton(id, icon, label) { return `<button class="nav-item ${view===id?'active':''}" data-view="${id}"><span class="icon">${icon}</span>${label}</button>` }
+function navButton(id, icon, label) { return `<button class="nav-item ${view===id?'active':''}" data-view="${id}" ${view===id?'aria-current="page"':''}><span class="icon" aria-hidden="true">${icon}</span>${label}</button>` }
 function planningConfig() { return configForDayModes(state.plannerConfig,state.dayModes) }
 
 function todayView() {
@@ -474,9 +474,9 @@ function todayView() {
   const unscheduled = state.items.filter(i => i.day===selectedDay && i.unscheduled && !i.completed)
   return `<header class="topbar">
       <div><div class="eyebrow">YOUR DAY</div><h1>${selectedDay}</h1><p class="date-line">Fixed commitments stay anchored. Flexible work can move when reality changes.</p></div>
-      <div class="top-actions"><button class="secondary-button" data-action="plan-day"><span class="icon">↳</span> Replan</button><button class="reality-button" data-action="reality"><span class="icon">✦</span> Reality mode</button></div>
+      <div class="top-actions"><button class="secondary-button" data-action="plan-day"><span class="icon" aria-hidden="true">↳</span> Replan</button><button class="reality-button" data-action="reality"><span class="icon" aria-hidden="true">✦</span> Reality mode</button></div>
     </header>
-    <div class="day-tabs">${DAYS.map(d=>`<button class="day-tab ${d===selectedDay?'active':''}" data-day="${d}">${d.slice(0,3)}</button>`).join('')}</div>
+    <div class="day-tabs" aria-label="Choose a day">${DAYS.map(d=>`<button class="day-tab ${d===selectedDay?'active':''}" data-day="${d}" aria-pressed="${d===selectedDay}" aria-label="Show ${d} plan">${d.slice(0,3)}</button>`).join('')}</div>
     <div class="day-mode"><div><strong>How much should today hold?</strong><span>${esc(MODE_HINTS[modeForDay(state.dayModes,selectedDay)])}</span></div><div class="day-mode-options">${DAY_MODES.map(mode=>`<button type="button" data-day-mode="${mode}" aria-pressed="${modeForDay(state.dayModes,selectedDay)===mode}">${MODE_LABELS[mode]}</button>`).join('')}</div></div>
     <section class="day-summary">
       ${summary(`${done}/${items.length}`,'blocks done')}
@@ -516,16 +516,18 @@ function timelineItem(it) {
   const suggestionUI=suggestion?`<div class="duration-suggestion"><span>Usually ${formatMinutes(suggestion.suggestedMinutes)} after ${suggestion.sampleCount} finishes. Estimated ${formatMinutes(it.durationMinutes)} now.</span><button data-use-duration="${attr(it.id)}">Use ${formatMinutes(suggestion.suggestedMinutes)}</button><button data-ignore-duration="${attr(it.id)}">Ignore this suggestion</button></div>`:''
   const pattern=!isFixed(it)&&!it.completed&&!it.skipped?workPattern(state.workLog,it.title,state.learningChoices,it.preferredWindow):null
   const patternUI=pattern?`<div class="work-pattern"><span>Finished ${pattern.completed} of ${pattern.attempts} recent ${esc(it.title)} attempts${pattern.skipped?` · skipped ${pattern.skipped}`:''}.</span>${pattern.preferred?`<span>${pattern.preferred.sampleCount} completed blocks were scheduled in the ${pattern.preferred.band}.</span><button data-use-window="${attr(it.id)}">Prefer ${pattern.preferred.band}</button><button data-ignore-window="${attr(it.id)}">Ignore this suggestion</button>`:''}</div>`:''
-  return `<article class="timeline-item ${it.kind} ${it.completed?'done':''} ${it.skipped?'skipped':''} ${it.unscheduled?'unscheduled':''}">
+  const titleId=`item-title-${it.id}`
+  const completionLabel=it.skipped?`${it.title} is skipped`:it.completed?`Mark ${it.title} incomplete`:`Mark ${it.title} complete`
+  return `<article class="timeline-item ${it.kind} ${it.completed?'done':''} ${it.skipped?'skipped':''} ${it.unscheduled?'unscheduled':''}" aria-labelledby="${attr(titleId)}">
     <div class="time-col"><span>${it.skipped?'Skipped':it.start?displayTime(it.start):'Unscheduled'}</span>${it.end?`<small>${displayTime(it.end)}</small>`:''}</div>
-    <button class="check ${it.completed?'checked':''}" data-toggle="${attr(it.id)}" ${it.skipped?'disabled':''}>${it.completed?'✓':'○'}</button>
-    <div class="item-body"><div class="item-topline"><div><h3>${esc(it.title)}</h3><div class="item-meta">${meta.map(x=>`<span>${esc(x)}</span>`).join('')}${it.note?`<span class="needs-attention">${esc(it.note)}</span>`:''}</div></div></div>${subtasks}${feedback}${suggestionUI}${patternUI}</div>
+    <button class="check ${it.completed?'checked':''}" data-toggle="${attr(it.id)}" aria-label="${attr(completionLabel)}" aria-pressed="${it.completed}" ${it.skipped?'disabled':''}>${it.completed?'✓':'○'}</button>
+    <div class="item-body"><div class="item-topline"><div><h3 id="${attr(titleId)}">${esc(it.title)}</h3><div class="item-meta">${meta.map(x=>`<span>${esc(x)}</span>`).join('')}${it.note?`<span class="needs-attention">${esc(it.note)}</span>`:''}</div></div></div>${subtasks}${feedback}${suggestionUI}${patternUI}</div>
   </article>`
 }
 
 function weekView() {
   const diagnostics=weekDiagnostics(state.items,planningConfig())
-  return `<div class="view-pad"><div class="page-head"><div><div class="eyebrow">WEEK AT A GLANCE</div><h1>This week</h1><p class="page-intro">The engine protects fixed commitments and keeps a minimum amount of the day intentionally open.</p></div><button class="reality-button" data-action="plan-week"><span class="icon">✦</span> Plan week</button></div>
+  return `<div class="view-pad"><div class="page-head"><div><div class="eyebrow">WEEK AT A GLANCE</div><h1>This week</h1><p class="page-intro">The engine protects fixed commitments and keeps a minimum amount of the day intentionally open.</p></div><button class="reality-button" data-action="plan-week"><span class="icon" aria-hidden="true">✦</span> Plan week</button></div>
     <div class="week-grid">${DAYS.map(day => {
       const items=dayItems(day); const m=diagnostics.byDay[day]
       return `<button class="week-card ${day===selectedDay?'selected':''} ${m.conflicts||m.openMinutes<m.protectedFreeMinutes?'has-warning':''}" data-open-day="${day}"><div class="week-card-head"><strong>${day}</strong><span>${formatMinutes(m.fixedMinutes)} fixed · ${formatMinutes(m.openMinutes)} open</span></div>${items.slice(0,5).map(i=>`<div class="week-line"><span>${i.start?displayTime(i.start):'—'}</span>${esc(i.title)}</div>`).join('')}${items.length>5?`<div class="more-line">+ ${items.length-5} more</div>`:''}<div class="capacity-line"><span>Protected</span><strong>${formatMinutes(m.protectedFreeMinutes)}</strong></div></button>`
@@ -563,11 +565,11 @@ function historyView() {
 }
 function goalCard(g){
   const pct=g.target?Math.min(100,Math.round((g.progress/g.target)*100)):0
-  return `<article class="goal-card"><div class="goal-top"><span>${esc(g.cadence||'Ongoing')}</span><strong>${g.target?`${g.progress}/${g.target}`:''}</strong></div><h2>${esc(g.title)}</h2><div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div><p>${esc(g.unit||'')}${g.minimumDurationMinutes?` · minimum ${g.minimumDurationMinutes}m each`:''}${g.note?` · ${esc(g.note)}`:''}</p>${g.id==='points'?`<div class="score-input"><input data-goal-progress="points" type="range" min="0" max="4000" step="100" value="${g.progress}"></div>`:''}${roadmapContent(g.roadmap)}<button class="secondary-button goal-next-button" data-goal-breakdown="goal:${attr(g.id)}">${g.roadmap?'Revise next step':'Find next step'}</button></article>`
+  return `<article class="goal-card"><div class="goal-top"><span>${esc(g.cadence||'Ongoing')}</span><strong>${g.target?`${g.progress}/${g.target}`:''}</strong></div><h2>${esc(g.title)}</h2><div class="progress-track" role="progressbar" aria-label="${attr(g.title)} progress" aria-valuemin="0" aria-valuemax="${g.target||100}" aria-valuenow="${g.progress||0}"><div class="progress-fill" style="width:${pct}%"></div></div><p>${esc(g.unit||'')}${g.minimumDurationMinutes?` · minimum ${g.minimumDurationMinutes}m each`:''}${g.note?` · ${esc(g.note)}`:''}</p>${g.id==='points'?`<div class="score-input"><input data-goal-progress="points" type="range" min="0" max="4000" step="100" value="${g.progress}" aria-label="${attr(g.title)} progress"></div>`:''}${roadmapContent(g.roadmap)}<button class="secondary-button goal-next-button" data-goal-breakdown="goal:${attr(g.id)}">${g.roadmap?'Revise next step':'Find next step'}</button></article>`
 }
 function metricCard(m){
   const pct=m.target?Math.min(100,Math.round((m.progress/m.target)*100)):0
-  return `<article class="goal-card metric-card"><div class="goal-top"><span>Metric · ${esc(m.cadence||'Daily')}</span><strong>${m.progress}/${m.target}</strong></div><h2>${esc(m.title)}</h2><div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div><p>${esc(m.unit||'units')}${m.details?` · ${esc(m.details)}`:''}</p></article>`
+  return `<article class="goal-card metric-card"><div class="goal-top"><span>Metric · ${esc(m.cadence||'Daily')}</span><strong>${m.progress}/${m.target}</strong></div><h2>${esc(m.title)}</h2><div class="progress-track" role="progressbar" aria-label="${attr(m.title)} progress" aria-valuemin="0" aria-valuemax="${m.target}" aria-valuenow="${m.progress}"><div class="progress-fill" style="width:${pct}%"></div></div><p>${esc(m.unit||'units')}${m.details?` · ${esc(m.details)}`:''}</p></article>`
 }
 function openLoopCard(loop){
   return `<article class="goal-card open-loop"><div class="goal-top"><span>Open loop</span><strong>${esc(loop.status||'open')}</strong></div><h2>${esc(loop.title)}</h2><p>${esc(loop.details||loop.sourceText||'Still needs a concrete next action.')}</p>${roadmapContent(loop.roadmap)}<button class="secondary-button goal-next-button" data-goal-breakdown="open_loop:${attr(loop.id)}">${loop.roadmap?'Revise next step':'Find next step'}</button></article>`
@@ -596,7 +598,7 @@ function inboxView() {
   return `<div class="view-pad intake-page"><div class="page-head"><div><div class="eyebrow">BRAIN DUMP INBOX</div><h1>Tell it everything.</h1><p class="page-intro">Don’t organize it first. Daylight separates fixed commitments, flexible work, routines, rules, goals, metrics, and things that are still too vague to schedule.</p></div></div>
     <section class="intake-composer">
       <div class="intake-copy"><div class="mini-label">UNSTRUCTURED INPUT</div><h2>What does your life look like right now?</h2><p>Paste notes, a weekly schedule, worries, goals, habits, deadlines, or half-formed plans. Nothing changes until you review it.</p></div>
-      <textarea id="brain-dump-input" placeholder="Monday\n8:30 - Matt\n7:15 - Motion 3D\n\nMake my bed every day...">${esc(brainDumpText)}</textarea>
+      <label class="sr-only" for="brain-dump-input">Brain dump</label><textarea id="brain-dump-input" placeholder="Monday\n8:30 - Matt\n7:15 - Motion 3D\n\nMake my bed every day...">${esc(brainDumpText)}</textarea>
       <div class="intake-actions"><button class="secondary-button" data-action="sample-intake">Use example</button><div class="intake-action-group"><button class="secondary-button" type="button" data-voice="inbox" aria-label="Speak brain dump">🎙 Speak</button><button class="reality-button" data-action="analyze-intake" ${intakeSending?'disabled':''}>${intakeSending?'Interpreting…':'✦ Understand this'}</button></div></div><div class="voice-status" data-voice-status="inbox" aria-live="polite"></div><p class="voice-note">Your browser handles transcription and may use its speech service. Review the text before sending it to Daylight.</p>
     </section>
     ${questions}
@@ -642,10 +644,10 @@ function inboxHistoryCard(item){
 }
 
 function assistantPanel() {
-  return `<aside class="assistant-panel ${chatOpen?'':'collapsed'}"><button class="assistant-toggle" data-action="chat-toggle">◌</button>${chatOpen?`
-    <div class="assistant-head"><div class="assistant-title"><span class="icon">✦</span> Planner</div><div class="assistant-status">AI understands intent · engine owns time arithmetic</div></div>
-    <div class="chat-thread">${messages.map(chatBubble).join('')}${sending?'<div class="thinking"><span class="spin">↻</span> Interpreting what changed…</div>':''}</div>
-    <div class="composer">${activeQuestionId?`<div class="answer-context">Answering: ${esc(state.questions.find(item=>item.id===activeQuestionId)?.text||'Question')} <button data-action="cancel-answer" aria-label="Cancel answer">×</button></div>`:''}<textarea id="chat-input" placeholder="${activeQuestionId?'Your answer…':"Tell me what's going on…"}" rows="3"></textarea><button data-action="send" aria-label="Send message">➤</button><button type="button" class="voice-button" data-voice="chat" aria-label="Speak to planner">🎙</button><div class="voice-status" data-voice-status="chat" aria-live="polite"></div><div class="composer-tools"><button type="button" data-action="read-aloud" aria-pressed="${readRepliesAloud}">${readRepliesAloud?'🔊 Voice replies on':'🔈 Read replies aloud'}</button></div><div class="composer-hint">Your browser handles voice transcription. Review the text, then send it. Proposed changes still need your approval.</div></div>`:''}</aside>`
+  return `<aside class="assistant-panel ${chatOpen?'':'collapsed'}" aria-label="Planner assistant"><button class="assistant-toggle" data-action="chat-toggle" aria-label="${chatOpen?'Close planner assistant':'Open planner assistant'}" aria-expanded="${chatOpen}">◌</button>${chatOpen?`
+    <div id="planner-chat"><div class="assistant-head"><div class="assistant-title"><span class="icon" aria-hidden="true">✦</span> Planner</div><div class="assistant-status">AI understands intent · engine owns time arithmetic</div></div>
+    <div class="chat-thread" role="log" aria-label="Conversation with Planner">${messages.map(chatBubble).join('')}${sending?'<div class="thinking" role="status"><span class="spin" aria-hidden="true">↻</span> Interpreting what changed…</div>':''}</div>
+    <div class="composer">${activeQuestionId?`<div class="answer-context">Answering: ${esc(state.questions.find(item=>item.id===activeQuestionId)?.text||'Question')} <button data-action="cancel-answer" aria-label="Cancel answer">×</button></div>`:''}<label class="sr-only" for="chat-input">Message Planner</label><textarea id="chat-input" placeholder="${activeQuestionId?'Your answer…':"Tell me what's going on…"}" rows="3"></textarea><button data-action="send" aria-label="Send message">➤</button><button type="button" class="voice-button" data-voice="chat" aria-label="Speak to planner">🎙</button><div class="voice-status" data-voice-status="chat" aria-live="polite"></div><div class="composer-tools"><button type="button" data-action="read-aloud" aria-pressed="${readRepliesAloud}">${readRepliesAloud?'🔊 Voice replies on':'🔈 Read replies aloud'}</button></div><div class="composer-hint">Your browser handles voice transcription. Review the text, then send it. Proposed changes still need your approval.</div></div></div>`:''}</aside>`
 }
 function chatBubble(m) {
   return `<div class="bubble-wrap ${m.role}"><div class="bubble">${esc(m.text)}</div>${m.proposals?.length?`<div class="proposal-list">${m.proposals.map((p,i)=>proposalCard(p,i,m.id)).join('')}</div>`:''}${m.questions?.map(q=>`<div class="question-chip">${esc(q)}</div>`).join('')||''}</div>`

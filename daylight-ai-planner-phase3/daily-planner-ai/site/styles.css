@@ -9,6 +9,9 @@
 body { margin: 0; min-width: 1180px; min-height: 100vh; background: #f4f4ef; }
 button, textarea { font: inherit; }
 button { color: inherit; }
+.skip-link { position: fixed; z-index: 1000; top: 8px; left: 8px; transform: translateY(-160%); border-radius: 7px; background: #171714; color: #fff; padding: 10px 13px; font-size: 13px; font-weight: 700; text-decoration: none; }
+.skip-link:focus { transform: translateY(0); }
+*:focus-visible { outline: 3px solid #805c00 !important; outline-offset: 3px; }
 .app-shell { min-height: 100vh; display: grid; grid-template-columns: 196px minmax(620px,1fr) 370px; }
 .sidebar { position: sticky; top: 0; height: 100vh; border-right: 1px solid #deded6; padding: 24px 16px; display: flex; flex-direction: column; background: #f7f7f3; }
 .brand { font-weight: 730; letter-spacing: -.025em; display: flex; align-items: center; gap: 9px; margin: 4px 8px 30px; }
@@ -73,6 +76,7 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
 .empty-state { padding: 60px 20px; text-align: center; color: #8b8b84; }
 .assistant-panel { position: sticky; top: 0; height: 100vh; border-left: 1px solid #deded6; background: #f7f7f3; display: grid; grid-template-rows: auto 1fr auto; min-width: 0; transition: width .2s ease; }
 .assistant-panel.collapsed { width: 52px; grid-template-rows: auto; }
+.assistant-panel > #planner-chat { min-height: 0; display: grid; grid-template-rows: auto 1fr auto; }
 .assistant-toggle { position: absolute; top: 18px; right: 18px; border: 0; background: #eaeae3; border-radius: 50%; width: 34px; height: 34px; display: grid; place-items: center; cursor: pointer; z-index: 2; }
 .assistant-panel.collapsed .assistant-toggle { right: 9px; }
 .assistant-head { padding: 24px 58px 17px 22px; border-bottom: 1px solid #e2e2db; }
@@ -387,4 +391,8 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
   .composer > .voice-button { right:66px; }
   .composer textarea { padding-right:108px; }
   .composer-hint,.voice-status,.composer-tools button { font-size:12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }

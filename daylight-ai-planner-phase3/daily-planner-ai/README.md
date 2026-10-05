@@ -41,6 +41,7 @@ Milestone 4 planner with conversation, local recovery, and an invite-only cloud 
 - cloud copy deletion while retaining the plan on this device
 - installable web app metadata and Daylight home-screen icons
 - offline app-shell loading with local planner edits preserved until reconnection
+- keyboard skip navigation, visible focus indicators, named icon controls, spoken progress values, and reduced-motion support
 
 ## Product architecture
 Claude interprets what the user means. It does not get final authority over time placement.

@@ -535,12 +535,21 @@ Next: summarize recurring duration and skip patterns, then let the user explicit
 - The phone layout increases tap areas and text sizes for navigation, weekday tabs, day modes, quick task entry, work actions, checkmarks, routine steps, and voice/chat controls.
 - Completed and skipped blocks use higher contrast. This is an early mobile pass; installability, offline behavior, device testing, and a full accessibility audit remain later work.
 
-### Checkpoint 9B — installable offline app shell (implemented locally 2026-10-04)
+### Checkpoint 9B — installable offline app shell (verified on preview 2026-10-04)
 
 - Daylight has a standalone web app manifest, branded home-screen icons, and a browser-native installation action when supported.
 - The planner interface and built assets are cached for offline use. Planner edits continue to save locally and queue for cloud sync after reconnecting.
 - AI, Identity, and cloud APIs remain network-only so stale server responses are never presented as current.
-- A local end-to-end test loaded Daylight with its server stopped, added a task, and preserved that task through another offline reload. Draft preview verification remains pending.
+- A local end-to-end test loaded Daylight with its server stopped, added a task, and preserved that task through another offline reload.
+- Deploy Preview 1 served the manifest and service worker with the expected offline fallback and network-only API exclusions. Production remains on checkpoint 4A.
+
+### Checkpoint 9C — keyboard and assistive-control baseline (implemented locally 2026-10-04)
+
+- Keyboard users can reveal a **Skip to planner** link, and all interactive controls receive a strong visible focus ring.
+- Primary navigation exposes the current section, weekday choices expose their pressed state, and task completion controls announce the task and intended action instead of only a circle or checkmark.
+- Planner chat, brain-dump input, assistant open/close state, and goal progress now have programmatic names or values for assistive technology.
+- Reduced-motion preferences suppress nonessential transitions and the loading spinner animation.
+- The production build passed automated regression tests plus manual keyboard and accessibility-tree checks. A broader screen-reader and physical-device test matrix remains part of release readiness.
 
 ### Checkpoint 4G — AI endpoint safeguards (implemented locally 2026-10-03)
 
