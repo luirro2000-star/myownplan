@@ -39,6 +39,8 @@ Milestone 4 planner with conversation, local recovery, and an invite-only cloud 
 - revision checks that pause automatic sync when another device changed the plan
 - explicit first-sync choice between the plan on this device and the cloud plan
 - cloud copy deletion while retaining the plan on this device
+- installable web app metadata and Daylight home-screen icons
+- offline app-shell loading with local planner edits preserved until reconnection
 
 ## Product architecture
 Claude interprets what the user means. It does not get final authority over time placement.

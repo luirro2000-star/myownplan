@@ -21,6 +21,10 @@ nav { display: grid; gap: 4px; }
 .mini-label { font-size: 10px; letter-spacing: .11em; font-weight: 800; color: #9b9b93; margin: 0 10px 7px; text-transform: uppercase; }
 .rule-preview { font-size: 13px; background: #ecece5; padding: 10px; border-radius: 8px; margin-bottom: 9px; }
 .ghost-button { font-size: 12px; padding-left: 9px; }
+.connection-state { display: flex; align-items: center; gap: 7px; margin: 0 9px 8px; color: #797970; font-size: 10px; line-height: 1.35; }
+.connection-state span { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: #7fa06e; }
+.connection-state.offline { color: #8b6724; }
+.connection-state.offline span { background: #d39a32; }
 .main-panel { min-height: 100vh; background: #fbfbf8; }
 .topbar { padding: 38px 46px 20px; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
 .eyebrow { font-size: 10px; letter-spacing: .14em; font-weight: 800; color: #8b8b84; margin-bottom: 8px; }

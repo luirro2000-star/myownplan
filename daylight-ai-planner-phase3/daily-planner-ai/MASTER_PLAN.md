@@ -535,6 +535,13 @@ Next: summarize recurring duration and skip patterns, then let the user explicit
 - The phone layout increases tap areas and text sizes for navigation, weekday tabs, day modes, quick task entry, work actions, checkmarks, routine steps, and voice/chat controls.
 - Completed and skipped blocks use higher contrast. This is an early mobile pass; installability, offline behavior, device testing, and a full accessibility audit remain later work.
 
+### Checkpoint 9B — installable offline app shell (implemented locally 2026-10-04)
+
+- Daylight has a standalone web app manifest, branded home-screen icons, and a browser-native installation action when supported.
+- The planner interface and built assets are cached for offline use. Planner edits continue to save locally and queue for cloud sync after reconnecting.
+- AI, Identity, and cloud APIs remain network-only so stale server responses are never presented as current.
+- A local end-to-end test loaded Daylight with its server stopped, added a task, and preserved that task through another offline reload. Draft preview verification remains pending.
+
 ### Checkpoint 4G — AI endpoint safeguards (implemented locally 2026-10-03)
 
 - Assistant and brain-dump AI requests now use the same signed-in origin check already used by goal breakdown and cloud write operations.

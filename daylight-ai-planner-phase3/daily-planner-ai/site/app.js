@@ -249,6 +249,8 @@ let snapshotBusy = false
 let snapshotConfirmRevision = null
 let snapshotNotice = ''
 let accountPanelOpen = !window.matchMedia('(max-width: 900px)').matches
+let installPrompt = null
+let offline = !navigator.onLine
 
 const app = document.querySelector('#app')
 
@@ -276,6 +278,8 @@ function sidebar() {
       ${navButton('history','↶','History')}
     </nav>
     <div class="sidebar-spacer"></div>
+    <div class="connection-state ${offline?'offline':''}" role="status"><span></span>${offline?'Offline · changes stay on this device':'Online'}</div>
+    ${installPrompt?'<button class="ghost-button" data-action="install-app"><span class="icon">⇩</span> Install Daylight</button>':''}
     <details class="account-details" ${accountPanelOpen||inviteToken||cloudCopy?'open':''}><summary>${inviteToken?'Accept invitation':accountUser?'Account':'Cloud sync'}</summary>${accountControls()}</details>
     <div class="mini-label">Planning memory</div>
     <div class="rule-preview">${state.rules.length} rules · ${state.openLoops.length} open loops</div>
@@ -657,6 +661,7 @@ function bindEvents() {
   document.querySelector('[data-action="sign-out"]')?.addEventListener('click',signOut)
   document.querySelector('[data-action="check-ai"]')?.addEventListener('click',checkAIConnection)
   document.querySelector('[data-action="delete-cloud"]')?.addEventListener('click',deleteCloudCopy)
+  document.querySelector('[data-action="install-app"]')?.addEventListener('click',installDaylight)
   document.querySelector('[data-action="use-cloud"]')?.addEventListener('click',()=>{if(!cloudCopy?.exists)return;if(!confirm('Use the cloud plan on this device? Your current device plan will be replaced. Export a backup first if you want to keep it.'))return;applyCloudCopy(cloudCopy);render()})
   document.querySelector('[data-action="use-local"]')?.addEventListener('click',()=>{if(cloudCopy?.exists&&!confirm('Replace the cloud plan with this device’s plan? The previous cloud plan will be replaced.'))return;saveToCloud(true).then(()=>render())})
   document.querySelectorAll('[data-view]').forEach(el=>el.onclick=()=>{stopVoice();view=el.dataset.view;render()})
@@ -1200,5 +1205,15 @@ function esc(v=''){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt
 
 render()
 initializeAccount()
-window.addEventListener('online', queueCloudSave)
+async function installDaylight() {
+  if(!installPrompt)return
+  const prompt=installPrompt
+  installPrompt=null;render()
+  await prompt.prompt()
+}
+if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}))
+window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event;render()})
+window.addEventListener('appinstalled',()=>{installPrompt=null;render()})
+window.addEventListener('online',()=>{offline=false;render();queueCloudSave()})
+window.addEventListener('offline',()=>{offline=true;render()})
 document.addEventListener('visibilitychange', () => { if(!document.hidden)queueCloudSave() })
