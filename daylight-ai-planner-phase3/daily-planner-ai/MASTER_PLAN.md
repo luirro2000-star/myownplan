@@ -582,6 +582,15 @@ Deploy Preview 1 was checked at 390 × 844: bottom navigation remained anchored,
 
 This checkpoint is audited locally in `PHASE10B_AUDIT.md` and is intentionally held from another Netlify preview deployment to conserve credits.
 
+### Checkpoint 10C — one-screen Today design (implemented locally 2026-10-10)
+
+- Today is a bounded command center rather than a long page. Its schedule scrolls inside a dedicated region while the immediate action and essential controls remain visible.
+- The Now card and workload/capacity glance share one overview on wider screens and compress into a phone-sized hierarchy on narrow screens.
+- Phone headers, weekday controls, workload modes, quick add, planner status, and schedule heading were tightened without reducing the established touch targets.
+- Visual hierarchy uses one warm emphasis color, restrained surfaces, and progressive detail instead of adding more navigation layers.
+
+The production build and regression suite pass. Responsive preview inspection is batched with Guided Mode to conserve Netlify deploy credits; see `PHASE10C_AUDIT.md`.
+
 ### Checkpoint 4G — AI endpoint safeguards (implemented locally 2026-10-03)
 
 - Assistant and brain-dump AI requests now use the same signed-in origin check already used by goal breakdown and cloud write operations.

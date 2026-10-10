@@ -293,7 +293,7 @@ function render() {
   const main = view === 'today' ? todayView() : view === 'week' ? weekView() : view === 'goals' ? goalsView() : view === 'history' ? historyView() : inboxView()
   app.innerHTML = `<div class="app-shell">
     ${sidebar()}
-    <main class="main-panel" id="main-content" tabindex="-1">${main}</main>
+    <main class="main-panel ${view==='today'?'today-main':''}" id="main-content" tabindex="-1">${main}</main>
     ${assistantPanel()}
   </div>${uiNotice?`<div class="app-notice ${attr(uiNotice.tone)}" role="status"><span aria-hidden="true">${uiNotice.tone==='error'?'!':'✓'}</span>${esc(uiNotice.text)}</div>`:''}`
   bindEvents()
@@ -506,22 +506,26 @@ function todayView() {
   const conflicts = detectConflicts(state.items, selectedDay)
   const done = items.filter(i => i.completed).length
   const unscheduled = state.items.filter(i => i.day===selectedDay && i.unscheduled && !i.completed)
-  return `<header class="topbar">
+  return `<div class="today-view"><header class="topbar">
       <div><div class="eyebrow">YOUR DAY</div><h1>${selectedDay}</h1><p class="date-line">Fixed commitments stay anchored. Flexible work can move when reality changes.</p></div>
       <div class="top-actions"><button class="secondary-button" data-action="plan-day"><span class="icon" aria-hidden="true">↳</span> Replan</button><button class="reality-button" data-action="reality"><span class="icon" aria-hidden="true">✦</span> Reality mode</button></div>
     </header>
     <div class="day-tabs" aria-label="Choose a day">${DAYS.map(d=>`<button class="day-tab ${d===selectedDay?'active':''}" data-day="${d}" aria-pressed="${d===selectedDay}" aria-label="Show ${d} plan">${d.slice(0,3)}</button>`).join('')}</div>
-    <div class="day-mode"><div><strong>How much should today hold?</strong><span>${esc(MODE_HINTS[modeForDay(state.dayModes,selectedDay)])}</span></div><div class="day-mode-options">${DAY_MODES.map(mode=>`<button type="button" data-day-mode="${mode}" aria-pressed="${modeForDay(state.dayModes,selectedDay)===mode}">${MODE_LABELS[mode]}</button>`).join('')}</div></div>
-    ${focusCard(items)}
-    <section class="day-summary">
-      ${summary(`${done}/${items.length}`,'blocks done')}
-      ${summary(formatMinutes(metrics.fixedMinutes),'fixed + buffers')}
-      ${summary(formatMinutes(metrics.openMinutes),'open in day')}
-      ${summary(formatMinutes(metrics.protectedFreeMinutes),'protected free')}
+    <section class="today-overview">
+      ${focusCard(items)}
+      <div class="today-glance">
+        <div class="day-mode"><div><strong>How much should today hold?</strong><span>${esc(MODE_HINTS[modeForDay(state.dayModes,selectedDay)])}</span></div><div class="day-mode-options">${DAY_MODES.map(mode=>`<button type="button" data-day-mode="${mode}" aria-pressed="${modeForDay(state.dayModes,selectedDay)===mode}">${MODE_LABELS[mode]}</button>`).join('')}</div></div>
+        <section class="day-summary">
+          ${summary(`${done}/${items.length}`,'done')}
+          ${summary(formatMinutes(metrics.fixedMinutes),'fixed')}
+          ${summary(formatMinutes(metrics.openMinutes),'open')}
+          ${summary(formatMinutes(metrics.protectedFreeMinutes),'protected')}
+        </section>
+        ${plannerNotice(metrics, conflicts, unscheduled)}
+      </div>
     </section>
-    ${plannerNotice(metrics, conflicts, unscheduled)}
-    <form class="quick-add" id="quick-add-form"><label for="quick-add-title">Quick add a task</label><input id="quick-add-title" name="title" placeholder="What needs doing?" required maxlength="120"><label class="sr-only" for="quick-add-duration">Minutes</label><select id="quick-add-duration" name="duration"><option value="15">15 min</option><option value="30" selected>30 min</option><option value="60">1 hour</option><option value="120">2 hours</option></select><button type="submit">Add to ${esc(selectedDay)}</button></form>
-    <section class="timeline">${items.length ? items.map(timelineItem).join('') : '<div class="empty-state">Nothing scheduled yet. Tell the planner what you want to do.</div>'}</section>`
+    <form class="quick-add" id="quick-add-form"><label for="quick-add-title">Quick add a task</label><input id="quick-add-title" name="title" placeholder="What needs doing?" required maxlength="120"><label class="sr-only" for="quick-add-duration">Minutes</label><select id="quick-add-duration" name="duration"><option value="15">15 min</option><option value="30" selected>30 min</option><option value="60">1 hour</option><option value="120">2 hours</option></select><button type="submit"><span class="add-wide">Add to ${esc(selectedDay)}</span><span class="add-compact">Add</span></button></form>
+    <section class="timeline-shell"><div class="schedule-head"><div><span>SCHEDULE</span><strong>${items.length} block${items.length===1?'':'s'}</strong></div><span>Scroll the schedule, not the whole day</span></div><div class="timeline">${items.length ? items.map(timelineItem).join('') : '<div class="empty-state">Nothing scheduled yet. Tell Daylight what you want to do.</div>'}</div></section></div>`
 }
 function summary(value,label) { return `<div class="summary-stat"><strong>${value}</strong><span>${label}</span></div>` }
 function focusCard(items) {

@@ -141,6 +141,7 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
 .quick-add input, .quick-add select { border: 1px solid #dcdcd4; border-radius: 7px; background: #fafaf6; padding: 8px; font: inherit; font-size: 11px; }
 .quick-add button { border: 0; border-radius: 7px; background: #20201c; color: #fff; padding: 9px 11px; font: inherit; font-size: 10px; cursor: pointer; white-space: nowrap; }
 .quick-add button:hover { background: #3e3e37; }
+.add-compact { display:none; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 .history-list { margin-top: 28px; border-top: 1px solid #e2e2da; }
 .history-entry { padding: 14px 0; border-bottom: 1px solid #e8e8e1; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
@@ -468,6 +469,89 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
   .view-pad { padding-top:28px; }
   .intake-composer { margin-top:20px; }
   .intake-composer textarea { min-height:190px; }
+}
+
+/* Milestone 10C — one-screen Today command center */
+.today-main { height:100vh; overflow:hidden; }
+.today-view { height:100%; min-height:0; display:grid; grid-template-rows:auto auto auto auto minmax(150px,1fr); }
+.today-view .topbar { padding-top:22px; padding-bottom:14px; }
+.today-view .day-tabs { padding-bottom:12px; }
+.today-overview { min-height:0; display:grid; grid-template-columns:minmax(260px,1.08fr) minmax(290px,.92fr); gap:12px; margin:12px 46px 0; }
+.today-overview .focus-card { margin:0; min-height:0; height:100%; align-items:flex-start; flex-direction:column; padding:17px 18px; }
+.today-overview .focus-copy { flex:1; }
+.today-overview .focus-card h2 { font-size:25px; }
+.today-overview .focus-actions { width:100%; justify-content:flex-start; }
+.today-glance { min-width:0; display:grid; grid-template-rows:auto auto 1fr; gap:7px; }
+.today-glance .day-mode,.today-glance .day-summary,.today-glance .planner-notice { margin:0; }
+.today-glance .day-mode { padding:8px 10px; gap:8px; }
+.today-glance .day-mode span { display:none; }
+.today-glance .day-mode-options { flex-wrap:nowrap; }
+.today-glance .day-mode-options button { padding:6px 8px; }
+.today-glance .day-summary { grid-template-columns:repeat(4,minmax(0,1fr)); }
+.today-glance .summary-stat { padding:9px 8px; }
+.today-glance .summary-stat strong { font-size:13px; }
+.today-glance .summary-stat span { font-size:9px; }
+.today-glance .planner-notice { padding:9px 11px; align-items:center; }
+.today-view > .quick-add { margin-top:10px; }
+.timeline-shell { min-height:0; display:grid; grid-template-rows:auto minmax(0,1fr); margin:10px 46px 0; overflow:hidden; border:1px solid #e1e1d9; border-bottom:0; border-radius:13px 13px 0 0; background:#fff; }
+.schedule-head { min-height:42px; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:9px 14px; border-bottom:1px solid #ecece5; background:#f7f7f2; }
+.schedule-head > div { display:flex; align-items:baseline; gap:8px; }
+.schedule-head span { color:#929289; font-size:9px; letter-spacing:.09em; }
+.schedule-head strong { font-size:11px; }
+.timeline-shell .timeline { min-height:0; overflow:auto; padding:0 14px 30px; scroll-padding-top:8px; }
+.timeline-shell .timeline-item:last-child { border-bottom:0; }
+
+@media (max-width:1280px) {
+  .today-overview,.timeline-shell { margin-left:34px; margin-right:34px; }
+}
+
+@media (max-width:900px) {
+  .today-main { height:calc(100dvh - 126px); min-height:560px; }
+  .today-view { grid-template-rows:auto auto auto auto minmax(118px,1fr); }
+  .today-overview { grid-template-columns:1fr; gap:8px; margin:8px 20px 0; }
+  .today-overview .focus-card { height:auto; }
+  .today-glance { gap:6px; }
+  .timeline-shell { margin:8px 20px 0; }
+  .today-view > .quick-add { margin-top:8px; }
+  .schedule-head > span { display:none; }
+}
+
+@media (max-width:600px) {
+  .today-view .topbar { min-height:72px; padding:12px 16px 8px; flex-direction:row; align-items:center; gap:8px; }
+  .today-view .topbar .eyebrow,.today-view .date-line { display:none; }
+  .today-view .topbar h1 { font-size:29px; }
+  .today-view .top-actions { flex-wrap:nowrap; gap:5px; }
+  .today-view .top-actions > button { min-height:40px; padding:8px 10px; font-size:11px; }
+  .today-view .day-tabs { padding:0 16px 7px; overflow:visible; }
+  .today-view .day-tab { flex:1; min-width:0; min-height:38px; padding:6px 2px; font-size:12px; }
+  .today-overview { margin:7px 16px 0; }
+  .today-overview .focus-card { gap:9px; padding:12px 13px; }
+  .today-overview .focus-card h2 { font-size:20px; }
+  .today-overview .focus-card p { margin-top:4px; font-size:11px; }
+  .today-overview .focus-actions { display:grid; grid-template-columns:repeat(auto-fit,minmax(82px,1fr)); gap:5px; }
+  .today-overview .focus-actions button { min-height:39px; padding:6px 4px; font-size:11px; }
+  .today-glance .day-mode { min-height:48px; padding:6px 8px; align-items:center; flex-wrap:nowrap; }
+  .today-glance .day-mode strong { font-size:11px; }
+  .today-glance .day-mode-options { flex:1; }
+  .today-glance .day-mode-options button { min-height:34px; padding:5px 6px; font-size:10px; }
+  .today-glance .day-summary { grid-template-columns:repeat(4,minmax(0,1fr)); margin:0; }
+  .today-glance .summary-stat { padding:7px 5px; }
+  .today-glance .summary-stat strong { font-size:12px; }
+  .today-glance .summary-stat span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:8px; }
+  .today-glance .planner-notice { min-height:42px; padding:7px 9px; }
+  .today-glance .planner-notice strong { font-size:10px; }
+  .today-glance .planner-notice span:not(.planner-spark) { font-size:9px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .today-view > .quick-add { min-height:50px; margin:7px 16px 0; padding:6px; flex-wrap:nowrap; }
+  .today-view > .quick-add > label:first-child { display:none; }
+  .today-view > .quick-add input,.today-view > .quick-add select,.today-view > .quick-add button { min-height:38px; height:38px; font-size:13px; }
+  .today-view > .quick-add select { flex:0 0 78px; width:78px; padding-left:5px; padding-right:3px; }
+  .today-view > .quick-add button { flex:0 0 48px; padding:5px; }
+  .add-wide { display:none; }
+  .add-compact { display:inline; }
+  .timeline-shell { margin:7px 16px 0; }
+  .schedule-head { min-height:34px; padding:6px 10px; }
+  .timeline-shell .timeline { padding:0 10px 22px; }
+  .timeline-shell .timeline-item { padding:11px 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
