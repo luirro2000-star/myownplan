@@ -39,6 +39,18 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
 .day-tab { border: 0; background: transparent; padding: 7px 13px; border-radius: 999px; cursor: pointer; font-size: 12px; color: #77776f; }
 .day-tab.active { color: #171714; background: #ebebe4; font-weight: 700; }
 .day-summary { display: grid; grid-template-columns: repeat(4,1fr); margin: 24px 46px 10px; border: 1px solid #e5e5dd; border-radius: 12px; overflow: hidden; background: #fff; }
+.focus-card { margin:18px 46px 0; min-height:108px; display:flex; align-items:center; justify-content:space-between; gap:22px; border:1px solid #dadad1; border-radius:14px; background:#fff; padding:18px 20px; box-shadow:0 1px 0 #00000005; }
+.focus-card.now { border-color:#d8bd82; background:linear-gradient(125deg,#fffaf0,#fff 60%); }
+.focus-card.overdue { border-color:#dfc5b4; background:#fff9f5; }
+.focus-copy { min-width:0; }
+.focus-kicker { margin-bottom:5px; color:#88703a; font-size:9px; font-weight:800; letter-spacing:.14em; }
+.focus-card h2 { margin:0; font-size:22px; line-height:1.15; letter-spacing:-.03em; }
+.focus-card p { margin:7px 0 0; color:#77776e; font-size:11px; }
+.focus-actions { display:flex; align-items:center; gap:7px; flex-wrap:wrap; justify-content:flex-end; }
+.focus-actions button { min-height:38px; border:1px solid #d8d8cf; border-radius:9px; background:#f8f8f3; padding:8px 11px; font-size:11px; cursor:pointer; white-space:nowrap; }
+.focus-actions .focus-primary { border-color:#20201c; background:#20201c; color:#fff; }
+.focus-card.clear { min-height:78px; }
+.focus-card.clear h2 { font-size:16px; }
 .summary-stat { padding: 14px 16px; border-right: 1px solid #ecece5; display: flex; flex-direction: column; gap: 4px; }
 .summary-stat:last-child { border-right: 0; }
 .summary-stat strong { font-size: 15px; letter-spacing: -.02em; }
@@ -198,6 +210,7 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
 .restore-confirm button { margin: 0 8px 8px 0; }
 @media (max-width: 1280px) {
   .quick-add { margin-left: 34px; margin-right: 34px; }
+  .focus-card { margin-left:34px; margin-right:34px; }
   body { min-width: 1020px; }
   .app-shell { grid-template-columns: 170px minmax(560px,1fr) 320px; }
   .topbar, .view-pad { padding-left: 34px; padding-right: 34px; }
@@ -214,6 +227,7 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
 .chat-thread::-webkit-scrollbar-thumb { background:#d9d9d0; border-radius:10px; }
 @media (max-width: 900px) {
   .quick-add { margin-left: 20px; margin-right: 20px; flex-wrap: wrap; }
+  .focus-card { margin-left:20px; margin-right:20px; }
   .quick-add label:first-child { flex-basis: 100%; }
   body { min-width: 0; }
   .app-shell { display:block; }
@@ -437,7 +451,14 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
   .sidebar nav { overflow:visible; padding-top:5px; }
   .topbar,.view-pad { padding-left:16px; padding-right:16px; }
   .topbar { gap:16px; }
-  .quick-add,.day-summary,.day-mode,.planner-notice { margin-left:16px; margin-right:16px; }
+  .quick-add,.day-summary,.day-mode,.planner-notice,.focus-card { margin-left:16px; margin-right:16px; }
+  .focus-card { min-height:0; align-items:stretch; flex-direction:column; gap:15px; padding:17px; }
+  .focus-card h2 { font-size:24px; }
+  .focus-card p { font-size:13px; line-height:1.4; }
+  .focus-actions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); justify-content:stretch; }
+  .focus-actions button { min-height:46px; padding:8px 5px; white-space:normal; font-size:12px; }
+  .focus-card.clear { flex-direction:row; align-items:center; }
+  .focus-card.clear .secondary-button { min-height:44px; }
   .day-tabs,.timeline { padding-left:16px; padding-right:16px; }
   .day-summary { margin-top:16px; }
   .summary-stat { min-width:0; }

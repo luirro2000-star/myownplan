@@ -8,7 +8,7 @@
     "dev": "vite --host 127.0.0.1",
     "test:engine": "node engine-smoke-test.mjs && node engine-regression-test.mjs",
     "test:intake": "node intake-regression-test.mjs",
-    "test": "node engine-smoke-test.mjs && node engine-regression-test.mjs && node intake-regression-test.mjs && node goal-breakdown-regression-test.mjs && node planning-memory-regression-test.mjs && node day-modes-regression-test.mjs && node work-signals-regression-test.mjs && node duration-learning-regression-test.mjs && node work-patterns-regression-test.mjs && node assistant-regression-test.mjs && node planner-state-regression-test.mjs && node planner-snapshots-regression-test.mjs && node cloud-compare-regression-test.mjs && node ai-status-regression-test.mjs && node conversation-view-regression-test.mjs"
+    "test": "node engine-smoke-test.mjs && node engine-regression-test.mjs && node intake-regression-test.mjs && node goal-breakdown-regression-test.mjs && node planning-memory-regression-test.mjs && node day-modes-regression-test.mjs && node work-signals-regression-test.mjs && node duration-learning-regression-test.mjs && node work-patterns-regression-test.mjs && node assistant-regression-test.mjs && node planner-state-regression-test.mjs && node planner-snapshots-regression-test.mjs && node cloud-compare-regression-test.mjs && node ai-status-regression-test.mjs && node conversation-view-regression-test.mjs && node focus-card-regression-test.mjs"
   },
   "dependencies": {
     "@netlify/database": "^2.0.1",

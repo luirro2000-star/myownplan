@@ -114,6 +114,8 @@ On narrow screens, Daylight uses bottom navigation and a floating assistant butt
 
 Routine actions show a short confirmation and are recorded in **History** instead of filling the assistant. The assistant shows recent conversational turns, with older turns available on demand.
 
+The **Now / Up next** card turns the current plan into three direct choices: **Done**, **Later** for flexible work, or **Help me start** for one small AI-guided first step. These controls use the same undoable planner actions as the full timeline.
+
 History keeps the last 20 planner undo checkpoints. Signed-in accounts also save the planner, Inbox, conversation, and undo history in Netlify Database. At first sign-in, Daylight asks whether to use the existing cloud plan or move this device’s plan to cloud. If two devices edit the same plan, automatic sync pauses for a choice. Use **Download backup** to save a JSON copy of planner data and history, or **Import backup** to restore one. Keep backups private. **Delete cloud copy** removes server data while leaving this device’s copy.
 
 Signed-in users can also open **History → Earlier cloud versions** to restore one of the last 20 server snapshots. Restoring creates a new current version and keeps the pre-restore plan in Undo. A changed cloud revision pauses the restore so another device's edits are not overwritten.

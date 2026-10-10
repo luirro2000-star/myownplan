@@ -562,7 +562,7 @@ This completes the locally planned Milestone 5 learning loop: observations, dura
 - The production build passed automated regression tests plus manual keyboard and accessibility-tree checks. A broader screen-reader and physical-device test matrix remains part of release readiness.
 - Deploy Preview 1 exposed the skip link, labeled navigation, current-page state, task-specific completion labels, focus styling, and reduced-motion rule at commit `94ea377`.
 
-### Checkpoint 9D / 10A — phone shell and calm assistant (implemented locally 2026-10-10)
+### Checkpoint 9D / 10A — phone shell and calm assistant (verified on preview 2026-10-10)
 
 - Phones use persistent bottom navigation and a thumb-reachable assistant button. The assistant opens as a focused sheet above navigation while the day remains the primary screen.
 - Routine planner actions now show brief confirmations and remain available in History instead of extending the assistant transcript.
@@ -570,7 +570,17 @@ This completes the locally planned Milestone 5 learning loop: observations, dura
 - Voice conversation sends a completed speech turn automatically, speaks the reply, and returns to listening until stopped. Schedule changes still require review. Browser speech recognition remains turn based; simultaneous interruption requires a later realtime audio integration.
 - Current competitor research and Daylight's calm-accuracy differentiation are recorded in `PRODUCT_RESEARCH.md`.
 
-Preview and physical-phone verification are required before this checkpoint is marked verified. Production remains unchanged until the batched release audit is complete.
+Deploy Preview 1 was checked at 390 × 844: bottom navigation remained anchored, the assistant started closed and opened above navigation, only real conversation turns appeared, and the page had no horizontal overflow. Physical-phone verification is still required. Production remains unchanged until the batched release audit is complete.
+
+### Checkpoint 10B — direct next-action controls (implemented locally 2026-10-10)
+
+- Today identifies the active, next, or most recently missed unfinished block and gives it a prominent card above the schedule summary.
+- **Done** completes the block immediately. Flexible work also offers **Later**, using the existing reversible skip flow.
+- **Help me start** opens Daylight and asks for one concrete first step without asking it to change the schedule.
+- Finished, skipped, and unscheduled blocks are excluded. When the selected day is clear, the card offers a direct path to Inbox.
+- Unit tests cover active, upcoming, overdue, other-day, and all-clear selection.
+
+This checkpoint is audited locally in `PHASE10B_AUDIT.md` and is intentionally held from another Netlify preview deployment to conserve credits.
 
 ### Checkpoint 4G — AI endpoint safeguards (implemented locally 2026-10-03)
 

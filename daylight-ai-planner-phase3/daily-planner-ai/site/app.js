@@ -24,6 +24,7 @@ import { durationSuggestion } from './duration-learning.js'
 import { workPattern, completionOutlook } from './work-patterns.js'
 import { sameCloudPayload } from './cloud-compare.js'
 import { selectConversationTurns } from './conversation-view.js'
+import { selectFocusItem } from './focus-card.js'
 import { getUser, login, logout, handleAuthCallback, acceptInvite, refreshSession } from '@netlify/identity'
 
 const STORAGE_KEY = 'daylight-planner-v03-static'
@@ -511,6 +512,7 @@ function todayView() {
     </header>
     <div class="day-tabs" aria-label="Choose a day">${DAYS.map(d=>`<button class="day-tab ${d===selectedDay?'active':''}" data-day="${d}" aria-pressed="${d===selectedDay}" aria-label="Show ${d} plan">${d.slice(0,3)}</button>`).join('')}</div>
     <div class="day-mode"><div><strong>How much should today hold?</strong><span>${esc(MODE_HINTS[modeForDay(state.dayModes,selectedDay)])}</span></div><div class="day-mode-options">${DAY_MODES.map(mode=>`<button type="button" data-day-mode="${mode}" aria-pressed="${modeForDay(state.dayModes,selectedDay)===mode}">${MODE_LABELS[mode]}</button>`).join('')}</div></div>
+    ${focusCard(items)}
     <section class="day-summary">
       ${summary(`${done}/${items.length}`,'blocks done')}
       ${summary(formatMinutes(metrics.fixedMinutes),'fixed + buffers')}
@@ -522,6 +524,14 @@ function todayView() {
     <section class="timeline">${items.length ? items.map(timelineItem).join('') : '<div class="empty-state">Nothing scheduled yet. Tell the planner what you want to do.</div>'}</section>`
 }
 function summary(value,label) { return `<div class="summary-stat"><strong>${value}</strong><span>${label}</span></div>` }
+function focusCard(items) {
+  const focus=selectFocusItem(items,{nowMinutes:detroitMinutes(),isCurrentDay:selectedDay===detroitDay()})
+  if(!focus)return `<section class="focus-card clear"><div><div class="focus-kicker">ALL CLEAR</div><h2>Nothing needs your attention here.</h2></div><button class="secondary-button" data-view="inbox">Add something</button></section>`
+  const it=focus.item
+  const time=it.start?`${displayTime(it.start)}${it.end?`–${displayTime(it.end)}`:''}`:'Needs a time'
+  const label=focus.phase==='now'?'NOW':focus.phase==='overdue'?'STILL OPEN':'UP NEXT'
+  return `<section class="focus-card ${focus.phase}" aria-labelledby="focus-title"><div class="focus-copy"><div class="focus-kicker">${label}</div><h2 id="focus-title">${esc(it.title)}</h2><p>${esc(time)} · ${isFixed(it)?'Fixed':'Flexible'}${it.durationMinutes?` · ${formatMinutes(it.durationMinutes)}`:''}</p></div><div class="focus-actions"><button class="focus-primary" data-toggle="${attr(it.id)}">Done</button>${!isFixed(it)?`<button data-skip-work="${attr(it.id)}">Later</button>`:''}<button data-focus-help="${attr(it.id)}">Help me start</button></div></section>`
+}
 function plannerNotice(metrics, conflicts, unscheduled) {
   const notes=[]
   if(conflicts.length) notes.push(`${conflicts.length} conflict${conflicts.length===1?'':'s'} need attention`)
@@ -740,6 +750,11 @@ function bindEvents() {
   document.querySelector('[data-action="send"]')?.addEventListener('click',()=>sendMessage())
   document.querySelectorAll('[data-voice]').forEach(el=>el.addEventListener('click',()=>toggleVoice(el.dataset.voice)))
   document.querySelectorAll('[data-quick-prompt]').forEach(el=>el.addEventListener('click',()=>sendMessage(el.dataset.quickPrompt)))
+  document.querySelectorAll('[data-focus-help]').forEach(el=>el.addEventListener('click',()=>{
+    const item=state.items.find(candidate=>candidate.id===el.dataset.focusHelp)
+    if(!item)return
+    chatOpen=true;render();sendMessage(`Help me start ${item.title}. Give me one small, concrete first step. Do not change my schedule.`)
+  }))
   document.querySelector('[data-action="read-aloud"]')?.addEventListener('click',()=>{readRepliesAloud=!readRepliesAloud;try{localStorage.setItem('daylight-read-replies',String(readRepliesAloud))}catch{};if(!readRepliesAloud)globalThis.speechSynthesis?.cancel();render()})
   document.querySelector('[data-action="cancel-answer"]')?.addEventListener('click',()=>{activeQuestionId=null;render()})
   document.querySelectorAll('[data-answer-question]').forEach(el=>el.addEventListener('click',()=>{activeQuestionId=el.dataset.answerQuestion;chatOpen=true;render();document.querySelector('#chat-input')?.focus()}))

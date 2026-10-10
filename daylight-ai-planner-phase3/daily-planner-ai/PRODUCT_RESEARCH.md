@@ -30,7 +30,7 @@ The meaningful difference is **calm accuracy**:
 ## Next research-backed opportunities
 
 1. A two-minute morning check-in that confirms energy, hard commitments, and one priority.
-2. A persistent **Now** card with one action, a lightweight timer, and quick **Done**, **Later**, and **Help me start** controls.
+2. A persistent **Now** card with quick **Done**, **Later**, and **Help me start** controls. The direct-action card is implemented; a lightweight timer remains optional future work.
 3. Direct manipulation of flexible blocks on the timeline, followed by a rule and conflict check.
 4. Realtime voice with interruption after provider, privacy, cost, and browser support are evaluated.
 5. Physical-device testing with one-handed reach, microphone permission changes, interruptions, and poor connectivity.
