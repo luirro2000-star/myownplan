@@ -591,6 +591,16 @@ This checkpoint is audited locally in `PHASE10B_AUDIT.md` and is intentionally h
 
 The production build and regression suite pass. Responsive preview inspection is batched with Guided Mode to conserve Netlify deploy credits; see `PHASE10C_AUDIT.md`.
 
+### Checkpoint 11A — Guided Mode foundation (implemented locally 2026-10-10)
+
+- The Now card can open or resume a focused step-by-step guide without navigating away from Today.
+- Guide setup supports cooking, interview, study, project, and general contexts. The AI asks at most four material questions, then produces materials and 3–12 concrete steps.
+- The active guide presents one step prominently, with a progress map, checkmarks, time estimates, specific safety notes, and Back/Next controls.
+- Guide progress is saved with local state, backups, and cloud sync. Step completion is undoable. Finishing a guide does not silently complete or reschedule its source task.
+- The new account-protected Function validates origin, request size, category, and structured provider output. Its instructions prohibit high-risk procedural guidance and schedule changes.
+
+The complete regression suite and production build pass. Signed-in generation and responsive visual checks remain for the batched Deploy Preview; see `PHASE11A_AUDIT.md`.
+
 ### Checkpoint 4G — AI endpoint safeguards (implemented locally 2026-10-03)
 
 - Assistant and brain-dump AI requests now use the same signed-in origin check already used by goal breakdown and cloud write operations.

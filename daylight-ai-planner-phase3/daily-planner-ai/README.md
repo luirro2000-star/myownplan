@@ -103,7 +103,7 @@ Optional:
 ANTHROPIC_MODEL=claude-sonnet-5-5
 ```
 
-The API key never appears in frontend code. `/api/assistant`, `/api/intake`, and `/api/goal-breakdown` call Anthropic only from Netlify Functions.
+The API key never appears in frontend code. `/api/assistant`, `/api/intake`, `/api/goal-breakdown`, and `/api/guide` call Anthropic only from Netlify Functions.
 If the provider rejects a request, Planner now shows the relevant error category instead of always saying the key is missing.
 
 ## Voice and data
@@ -117,6 +117,8 @@ Routine actions show a short confirmation and are recorded in **History** instea
 The **Now / Up next** card turns the current plan into three direct choices: **Done**, **Later** for flexible work, or **Help me start** for one small AI-guided first step. These controls use the same undoable planner actions as the full timeline.
 
 Today is designed as a single command center. The immediate action, workload setting, capacity, planner status, quick add, and beginning of the schedule remain together; only the schedule region scrolls as the day grows.
+
+Use **Guide me** on the current or next task when the work needs more structure. Guided Mode can ask a few relevant questions, then presents materials and one concrete step at a time with checkmarks, time estimates, and safety notes. Cooking, interview preparation, studying, projects, and general tasks have tailored instructions. Guides save with the planner and do not alter the schedule or complete the source task without an explicit action.
 
 History keeps the last 20 planner undo checkpoints. Signed-in accounts also save the planner, Inbox, conversation, and undo history in Netlify Database. At first sign-in, Daylight asks whether to use the existing cloud plan or move this device’s plan to cloud. If two devices edit the same plan, automatic sync pauses for a choice. Use **Download backup** to save a JSON copy of planner data and history, or **Import backup** to restore one. Keep backups private. **Delete cloud copy** removes server data while leaving this device’s copy.
 

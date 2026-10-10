@@ -25,6 +25,7 @@ import { workPattern, completionOutlook } from './work-patterns.js'
 import { sameCloudPayload } from './cloud-compare.js'
 import { selectConversationTurns } from './conversation-view.js'
 import { selectFocusItem } from './focus-card.js'
+import { normalizeGuideResponse, createSavedGuide, currentGuideStep } from './guided-mode.js'
 import { getUser, login, logout, handleAuthCallback, acceptInvite, refreshSession } from '@netlify/identity'
 
 const STORAGE_KEY = 'daylight-planner-v03-static'
@@ -90,6 +91,7 @@ const initialState = {
   operationLog: [],
   workLog: [],
   learningChoices: [],
+  guides: [],
   rules: [
     { id:'wake', text:'Wake up at 7:00 AM.' },
     { id:'sleep', text:'If waking at 7:00 AM, aim to be in bed between 10:30 and 11:00 PM.' },
@@ -121,6 +123,7 @@ function migrate(saved) {
   next.operationLog ||= []
   next.workLog ||= []
   next.learningChoices ||= []
+  next.guides ||= []
   return next
 }
 function load() {
@@ -250,6 +253,9 @@ let brainDumpText = ''
 let intakeDraft = null
 let intakeCaptureId = null
 let goalDraft = null
+let guideDraft = null
+let guideSending = false
+let guideError = ''
 let activeQuestionId = null
 let messages = loadConversation()
 if(!messages.length)messages=[{ id:'hello', role:'assistant', kind:'conversation', text:"Tell me what changed, what you need to get done, or how you're feeling about the day. I’ll interpret it, then the planning engine will find feasible time." }]
@@ -483,7 +489,7 @@ async function restoreCloudSnapshot(revision) {
     const result=await responseData(response)
     if(response.status===409){snapshotNotice='Another device changed your plan. Choose which copy to keep before restoring.';await loadCloudCopy();return}
     if(!response.ok)throw new Error('This version could not be restored. Your current plan is unchanged.')
-    state=migrate(result.state);undoStack=nextHistory;goalDraft=null;intakeDraft=null;intakeCaptureId=null
+    state=migrate(result.state);undoStack=nextHistory;goalDraft=null;guideDraft=null;intakeDraft=null;intakeCaptureId=null
     localStorage.setItem(STORAGE_KEY,JSON.stringify(state))
     localStorage.setItem(HISTORY_STORAGE_KEY,JSON.stringify(undoStack))
     cloudRevision=result.revision;lastSyncedPayload=JSON.stringify(cloudPayload());cloudReady=true
@@ -525,7 +531,7 @@ function todayView() {
       </div>
     </section>
     <form class="quick-add" id="quick-add-form"><label for="quick-add-title">Quick add a task</label><input id="quick-add-title" name="title" placeholder="What needs doing?" required maxlength="120"><label class="sr-only" for="quick-add-duration">Minutes</label><select id="quick-add-duration" name="duration"><option value="15">15 min</option><option value="30" selected>30 min</option><option value="60">1 hour</option><option value="120">2 hours</option></select><button type="submit"><span class="add-wide">Add to ${esc(selectedDay)}</span><span class="add-compact">Add</span></button></form>
-    <section class="timeline-shell"><div class="schedule-head"><div><span>SCHEDULE</span><strong>${items.length} block${items.length===1?'':'s'}</strong></div><span>Scroll the schedule, not the whole day</span></div><div class="timeline">${items.length ? items.map(timelineItem).join('') : '<div class="empty-state">Nothing scheduled yet. Tell Daylight what you want to do.</div>'}</div></section></div>`
+    <section class="timeline-shell"><div class="schedule-head"><div><span>SCHEDULE</span><strong>${items.length} block${items.length===1?'':'s'}</strong></div><span>Scroll the schedule, not the whole day</span></div><div class="timeline">${items.length ? items.map(timelineItem).join('') : '<div class="empty-state">Nothing scheduled yet. Tell Daylight what you want to do.</div>'}</div></section>${guidePanel()}</div>`
 }
 function summary(value,label) { return `<div class="summary-stat"><strong>${value}</strong><span>${label}</span></div>` }
 function focusCard(items) {
@@ -534,7 +540,29 @@ function focusCard(items) {
   const it=focus.item
   const time=it.start?`${displayTime(it.start)}${it.end?`–${displayTime(it.end)}`:''}`:'Needs a time'
   const label=focus.phase==='now'?'NOW':focus.phase==='overdue'?'STILL OPEN':'UP NEXT'
-  return `<section class="focus-card ${focus.phase}" aria-labelledby="focus-title"><div class="focus-copy"><div class="focus-kicker">${label}</div><h2 id="focus-title">${esc(it.title)}</h2><p>${esc(time)} · ${isFixed(it)?'Fixed':'Flexible'}${it.durationMinutes?` · ${formatMinutes(it.durationMinutes)}`:''}</p></div><div class="focus-actions"><button class="focus-primary" data-toggle="${attr(it.id)}">Done</button>${!isFixed(it)?`<button data-skip-work="${attr(it.id)}">Later</button>`:''}<button data-focus-help="${attr(it.id)}">Help me start</button></div></section>`
+  const savedGuide=state.guides?.find(guide=>guide.sourceItemId===it.id&&guide.steps?.some(step=>!step.completed))
+  return `<section class="focus-card ${focus.phase}" aria-labelledby="focus-title"><div class="focus-copy"><div class="focus-kicker">${label}</div><h2 id="focus-title">${esc(it.title)}</h2><p>${esc(time)} · ${isFixed(it)?'Fixed':'Flexible'}${it.durationMinutes?` · ${formatMinutes(it.durationMinutes)}`:''}</p></div><div class="focus-actions"><button class="focus-primary" data-toggle="${attr(it.id)}">Done</button>${!isFixed(it)?`<button data-skip-work="${attr(it.id)}">Later</button>`:''}<button data-guide-start="${attr(it.id)}">${savedGuide?'Resume guide':'Guide me'}</button></div></section>`
+}
+function guidePanel() {
+  if(!guideDraft)return ''
+  const saved=guideDraft.guideId&&state.guides?.find(guide=>guide.id===guideDraft.guideId)
+  if(saved)return activeGuidePanel(saved)
+  const questions=guideDraft.questions||[]
+  const types=[['general','Anything'],['cooking','Cooking'],['interview','Interview'],['study','Studying'],['project','Project']]
+  return `<section class="guide-layer" role="dialog" aria-modal="true" aria-labelledby="guide-heading"><div class="guide-panel setup"><header class="guide-head"><div><div class="guide-kicker">GUIDED MODE</div><h2 id="guide-heading">Let’s make this easier to follow</h2><p>Daylight asks only what changes the steps, then keeps one step in front of you.</p></div><button class="guide-close" data-action="close-guide" aria-label="Close guide">×</button></header>
+    <form id="guide-form" class="guide-setup-form">${questions.length?`<div class="guide-question-intro"><strong>A few details will make this accurate.</strong><span>${esc(guideDraft.title)}</span></div>${questions.map(question=>`<label>${esc(question.label)}<textarea name="answer-${attr(question.id)}" rows="2" placeholder="${attr(question.placeholder)}" required>${esc(guideDraft.answers?.[question.id]||'')}</textarea></label>`).join('')}`:`<label>What do you need help with?<input name="guide-title" value="${attr(guideDraft.title)}" maxlength="240" required></label><fieldset><legend>Kind of guide</legend><div class="guide-types">${types.map(([value,label])=>`<label><input type="radio" name="guide-type" value="${value}" ${guideDraft.type===value?'checked':''}><span>${label}</span></label>`).join('')}</div></fieldset><label>What should Daylight know?<textarea name="guide-context" rows="4" maxlength="4000" placeholder="What you have, your deadline, what feels difficult, dietary needs, the role you’re interviewing for…">${esc(guideDraft.context||'')}</textarea></label>`}
+      ${guideError?`<p class="guide-error" role="alert">${esc(guideError)}</p>`:''}<button class="guide-build" type="submit" ${guideSending?'disabled':''}>${guideSending?'Building your guide…':questions.length?'Use these answers':'Build my guide'}</button>
+    </form></div></section>`
+}
+function activeGuidePanel(guide) {
+  const current=currentGuideStep(guide)
+  if(!current)return ''
+  const step=current.step
+  const source=state.items.find(item=>item.id===guide.sourceItemId)
+  return `<section class="guide-layer" role="dialog" aria-modal="true" aria-labelledby="guide-heading"><div class="guide-panel active"><header class="guide-head"><div><div class="guide-kicker">${current.finished?'GUIDE COMPLETE':`STEP ${current.index+1} OF ${current.total}`}</div><h2 id="guide-heading">${esc(guide.title)}</h2><p>${esc(guide.summary)}</p></div><button class="guide-close" data-action="close-guide" aria-label="Close guide">×</button></header>
+    <div class="guide-workspace"><aside class="guide-map"><div class="guide-progress"><span style="width:${Math.round(current.completedCount/current.total*100)}%"></span></div>${guide.steps.map((item,index)=>`<button class="${index===current.index?'current':''} ${item.completed?'complete':''}" data-guide-step="${attr(guide.id)}:${index}"><span>${item.completed?'✓':index+1}</span>${esc(item.title)}</button>`).join('')}${guide.materials?.length?`<details><summary>What you need · ${guide.materials.length}</summary><ul>${guide.materials.map(item=>`<li>${esc(item)}</li>`).join('')}</ul></details>`:''}</aside>
+      <article class="guide-current ${current.finished?'finished':''}">${current.finished?`<div class="guide-finished-mark">✓</div><h3>You finished every step.</h3><p>The guide stays saved with your plan.</p>${source&&!source.completed?`<button class="guide-build" data-guide-finish-task="${attr(source.id)}">Mark ${esc(source.title)} done</button>`:''}`:`<div class="guide-step-time">${step.durationMinutes?`About ${formatMinutes(step.durationMinutes)}`:'Take the time you need'}</div><h3>${esc(step.title)}</h3><p>${esc(step.instruction)}</p>${step.safetyNote?`<div class="guide-safety"><strong>Keep in mind</strong>${esc(step.safetyNote)}</div>`:''}<div class="guide-step-actions"><button data-guide-move="${attr(guide.id)}:${Math.max(0,current.index-1)}" ${current.index===0?'disabled':''}>Back</button><button class="guide-build" data-guide-complete="${attr(guide.id)}:${current.index}">✓ Complete step</button><button data-guide-move="${attr(guide.id)}:${Math.min(current.total-1,current.index+1)}" ${current.index===current.total-1?'disabled':''}>Next</button></div>`}</article></div>
+  </div></section>`
 }
 function plannerNotice(metrics, conflicts, unscheduled) {
   const notes=[]
@@ -720,8 +748,8 @@ function bindEvents() {
   document.querySelector('[data-action="install-app"]')?.addEventListener('click',installDaylight)
   document.querySelector('[data-action="use-cloud"]')?.addEventListener('click',()=>{if(!cloudCopy?.exists)return;if(!confirm('Use the cloud plan on this device? Your current device plan will be replaced. Export a backup first if you want to keep it.'))return;applyCloudCopy(cloudCopy);render()})
   document.querySelector('[data-action="use-local"]')?.addEventListener('click',()=>{if(cloudCopy?.exists&&!confirm('Replace the cloud plan with this device’s plan? The previous cloud plan will be replaced.'))return;saveToCloud(true).then(()=>render())})
-  document.querySelectorAll('[data-view]').forEach(el=>el.onclick=()=>{endVoiceConversation();view=el.dataset.view;render()})
-  document.querySelectorAll('[data-day]').forEach(el=>el.onclick=()=>{selectedDay=el.dataset.day;render()})
+  document.querySelectorAll('[data-view]').forEach(el=>el.onclick=()=>{endVoiceConversation();guideDraft=null;view=el.dataset.view;render()})
+  document.querySelectorAll('[data-day]').forEach(el=>el.onclick=()=>{guideDraft=null;selectedDay=el.dataset.day;render()})
   document.querySelectorAll('[data-day-mode]').forEach(el=>el.onclick=()=>setDayMode(el.dataset.dayMode))
   document.querySelectorAll('[data-open-day]').forEach(el=>el.onclick=()=>{selectedDay=el.dataset.openDay;view='today';render()})
   document.querySelectorAll('[data-toggle]').forEach(el=>el.onclick=()=>toggleItem(el.dataset.toggle))
@@ -737,7 +765,7 @@ function bindEvents() {
   document.querySelectorAll('[data-apply]').forEach(el=>el.onclick=()=>{
     const [messageId,index]=el.dataset.apply.split(':'); const m=messages.find(m=>m.id===messageId); if(m?.proposals?.[Number(index)]) applyProposal(m.proposals[Number(index)])
   })
-  document.querySelector('[data-action="reset"]')?.addEventListener('click',()=>{pushUndo('Before reset');state=clone(initialState);intakeDraft=null;intakeCaptureId=null;goalDraft=null;brainDumpText='';save();setNotice('Prototype data restored.');render()})
+  document.querySelector('[data-action="reset"]')?.addEventListener('click',()=>{pushUndo('Before reset');state=clone(initialState);intakeDraft=null;intakeCaptureId=null;goalDraft=null;guideDraft=null;brainDumpText='';save();setNotice('Prototype data restored.');render()})
   document.querySelector('[data-action="undo"]')?.addEventListener('click',undoLast)
   document.querySelector('[data-action="undo-history"]')?.addEventListener('click',undoLast)
   document.querySelector('[data-action="load-snapshots"]')?.addEventListener('click',loadCloudSnapshots)
@@ -754,11 +782,13 @@ function bindEvents() {
   document.querySelector('[data-action="send"]')?.addEventListener('click',()=>sendMessage())
   document.querySelectorAll('[data-voice]').forEach(el=>el.addEventListener('click',()=>toggleVoice(el.dataset.voice)))
   document.querySelectorAll('[data-quick-prompt]').forEach(el=>el.addEventListener('click',()=>sendMessage(el.dataset.quickPrompt)))
-  document.querySelectorAll('[data-focus-help]').forEach(el=>el.addEventListener('click',()=>{
-    const item=state.items.find(candidate=>candidate.id===el.dataset.focusHelp)
-    if(!item)return
-    chatOpen=true;render();sendMessage(`Help me start ${item.title}. Give me one small, concrete first step. Do not change my schedule.`)
-  }))
+  document.querySelectorAll('[data-guide-start]').forEach(el=>el.addEventListener('click',()=>openGuide(el.dataset.guideStart)))
+  document.querySelector('[data-action="close-guide"]')?.addEventListener('click',()=>{guideDraft=null;guideError='';render()})
+  document.querySelector('#guide-form')?.addEventListener('submit',buildGuide)
+  document.querySelectorAll('[data-guide-step]').forEach(el=>el.addEventListener('click',()=>{const [id,index]=el.dataset.guideStep.split(':');moveGuide(id,Number(index))}))
+  document.querySelectorAll('[data-guide-move]').forEach(el=>el.addEventListener('click',()=>{const [id,index]=el.dataset.guideMove.split(':');moveGuide(id,Number(index))}))
+  document.querySelectorAll('[data-guide-complete]').forEach(el=>el.addEventListener('click',()=>{const [id,index]=el.dataset.guideComplete.split(':');completeGuideStep(id,Number(index))}))
+  document.querySelectorAll('[data-guide-finish-task]').forEach(el=>el.addEventListener('click',()=>{guideDraft=null;toggleItem(el.dataset.guideFinishTask)}))
   document.querySelector('[data-action="read-aloud"]')?.addEventListener('click',()=>{readRepliesAloud=!readRepliesAloud;try{localStorage.setItem('daylight-read-replies',String(readRepliesAloud))}catch{};if(!readRepliesAloud)globalThis.speechSynthesis?.cancel();render()})
   document.querySelector('[data-action="cancel-answer"]')?.addEventListener('click',()=>{activeQuestionId=null;render()})
   document.querySelectorAll('[data-answer-question]').forEach(el=>el.addEventListener('click',()=>{activeQuestionId=el.dataset.answerQuestion;chatOpen=true;render();document.querySelector('#chat-input')?.focus()}))
@@ -804,6 +834,71 @@ function bindEvents() {
   document.querySelectorAll('[data-intake-target]').forEach(el=>el.oninput=()=>editIntake(Number(el.dataset.intakeTarget),{target:Number(el.value)||0}))
   document.querySelectorAll('[data-intake-unit]').forEach(el=>el.oninput=()=>editIntake(Number(el.dataset.intakeUnit),{unit:el.value}))
   document.querySelectorAll('[data-intake-details]').forEach(el=>el.oninput=()=>editIntake(Number(el.dataset.intakeDetails),{details:el.value}))
+}
+
+function inferGuideType(title='') {
+  const value=title.toLowerCase()
+  if(/cook|dinner|lunch|breakfast|recipe|bake|meal/.test(value))return 'cooking'
+  if(/interview|portfolio review|recruiter/.test(value))return 'interview'
+  if(/study|exam|test|quiz|homework/.test(value))return 'study'
+  if(/project|build|design|create|make/.test(value))return 'project'
+  return 'general'
+}
+function openGuide(itemId) {
+  const item=state.items.find(candidate=>candidate.id===itemId)
+  if(!item)return
+  const existing=state.guides?.find(guide=>guide.sourceItemId===item.id&&guide.steps?.some(step=>!step.completed))
+  guideError=''
+  guideDraft=existing?{sourceItemId:item.id,guideId:existing.id}:{sourceItemId:item.id,title:item.title,type:inferGuideType(item.title),context:item.note||'',questions:[],answers:{}}
+  render()
+}
+async function buildGuide(event) {
+  event.preventDefault()
+  if(!guideDraft||guideSending)return
+  const form=event.currentTarget
+  const data=new FormData(form)
+  if(guideDraft.questions?.length){
+    guideDraft.answers=Object.fromEntries(guideDraft.questions.map(question=>[question.id,String(data.get(`answer-${question.id}`)||'').trim()]))
+  } else {
+    guideDraft.title=String(data.get('guide-title')||'').trim()
+    guideDraft.type=String(data.get('guide-type')||'general')
+    guideDraft.context=String(data.get('guide-context')||'').trim()
+  }
+  if(!accountUser){guideError='Sign in through Cloud sync to build a personalized guide. Saved guides will still work offline.';render();return}
+  guideSending=true;guideError='';render()
+  try {
+    const response=await accountFetch('/api/guide',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({title:guideDraft.title,type:guideDraft.type,context:guideDraft.context,answers:guideDraft.answers||{}})})
+    if(!response.ok)throw await apiError(response)
+    const normalized=normalizeGuideResponse(await response.json())
+    if(!normalized)throw new Error('Daylight could not build a usable guide from that response.')
+    if(normalized.needsInput){guideDraft.questions=normalized.questions;guideDraft.answers||={}}
+    else {
+      const guide=createSavedGuide(normalized,{id:uid(),sourceItemId:guideDraft.sourceItemId,type:guideDraft.type})
+      if(!guide)throw new Error('Daylight could not save that guide.')
+      pushUndo(`Created guide for ${guide.title}`)
+      state.guides=[...(state.guides||[]).filter(existing=>existing.id!==guide.id),guide].slice(-30)
+      guideDraft={sourceItemId:guide.sourceItemId,guideId:guide.id}
+      save()
+    }
+  } catch(error){guideError=connectionErrorMessage(error)||error.message||'The guide could not be built right now.'}
+  finally {guideSending=false;render()}
+}
+function moveGuide(id,index) {
+  const guide=state.guides?.find(item=>item.id===id)
+  if(!guide?.steps?.[index])return
+  guide.currentIndex=index;guide.updatedAt=new Date().toISOString();save();render()
+}
+function completeGuideStep(id,index) {
+  const guide=state.guides?.find(item=>item.id===id)
+  const step=guide?.steps?.[index]
+  if(!step)return
+  pushUndo(`Completed guide step: ${step.title}`)
+  step.completed=true
+  const next=guide.steps.findIndex((item,nextIndex)=>nextIndex>index&&!item.completed)
+  guide.currentIndex=next>=0?next:Math.max(0,guide.steps.findIndex(item=>!item.completed))
+  if(guide.currentIndex<0)guide.currentIndex=guide.steps.length-1
+  guide.updatedAt=new Date().toISOString()
+  save();render()
 }
 
 function editIntake(index,patch){
