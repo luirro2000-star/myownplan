@@ -5,7 +5,7 @@ Scope: Today information hierarchy, scrolling, responsive density, and action di
 
 ## Outcome
 
-**PASS locally for batched preview inspection.** Production remains unchanged.
+**PASS on Deploy Preview 1.** Production remains unchanged.
 
 ## Requirements checked
 
@@ -22,13 +22,14 @@ Scope: Today information hierarchy, scrolling, responsive density, and action di
 ## Verification
 
 - Complete regression suite: pass.
-- Production build: pass with 18 transformed modules.
+- Production build: pass with 19 transformed modules.
 - JavaScript syntax check: pass.
-- Static responsive inspection confirms bounded Today and timeline grids, minimum scroll region, phone safe areas, and no removal of accessible control names.
+- At 390 × 844, the page had no vertical or horizontal page overflow. Today occupied 718 px between the 58 px header and bottom navigation, while the schedule used its own 203 px scroll area.
+- On that phone viewport, the day controls, Now card, modes, four summary values, planner notice, quick add, schedule heading, and first scheduled block were all visible without moving the page.
+- At 1280 × 800, the Now card and glance panel formed a balanced two-column overview and the schedule used the remaining height without page overflow.
+- The schedule scroller did not move the header, focus card, or bottom navigation.
 
-## Remaining preview checks
+## Remaining release checks
 
-- Verify the command center at 390 × 844, a small-height phone, tablet width, and desktop width.
-- Confirm at least the schedule heading and first block are visible on a typical phone without page scrolling.
-- Confirm the timeline scroll does not move the header, focus card, or bottom navigation.
+- Check a physical phone and tablet in portrait and landscape.
 - Inspect long task titles, conflict messages, and the all-clear state for clipping.

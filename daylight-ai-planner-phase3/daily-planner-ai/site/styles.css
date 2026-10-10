@@ -563,7 +563,7 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
 .guide-head p { max-width:620px; margin:0; color:#77776f; font-size:11px; line-height:1.5; }
 .guide-kicker { color:#98752f; font-size:9px; font-weight:800; letter-spacing:.14em; }
 .guide-close { flex:0 0 auto; width:38px; height:38px; border:0; border-radius:50%; background:#e9e9e2; font-size:20px; cursor:pointer; }
-.guide-setup-form { min-height:0; overflow:auto; display:grid; gap:14px; padding:20px 22px 23px; }
+.guide-setup-form { min-height:0; overflow:auto; display:grid; align-content:start; gap:14px; padding:20px 22px 23px; }
 .guide-setup-form > label { display:grid; gap:6px; color:#65655e; font-size:10px; font-weight:700; }
 .guide-setup-form input,.guide-setup-form textarea { width:100%; border:1px solid #d9d9d0; border-radius:10px; background:#fff; padding:11px 12px; color:#252521; font:13px/1.45 inherit; resize:vertical; outline:0; }
 .guide-setup-form input:focus,.guide-setup-form textarea:focus { border-color:#a9a89d; box-shadow:0 0 0 3px #8f762115; }

@@ -5,7 +5,7 @@ Scope: guide intake, structured generation, focused execution, persistence, and 
 
 ## Outcome
 
-**PASS locally for batched preview verification.** Production remains unchanged.
+**PASS for implementation and responsive preview inspection.** Production remains unchanged.
 
 ## Requirements checked
 
@@ -30,10 +30,13 @@ Scope: guide intake, structured generation, focused execution, persistence, and 
 - Guide Function tests: pass for authentication, origin validation, missing key, invalid input, and structured provider request.
 - Production build: pass with 19 transformed modules.
 - JavaScript syntax checks: pass for frontend and Function.
+- Deploy Preview 1 displayed the focused setup flow at 390 × 844 with no page or horizontal overflow, full category choices, clear task context, and phone-safe actions.
+- The setup form is aligned to the top so short forms do not develop large vertical gaps.
+- Desktop inspection confirmed that Guided Mode opens over the bounded Today command center without disturbing its layout.
 
-## Remaining preview checks
+## Remaining release checks
 
 - Generate one cooking guide and one interview guide while signed in.
 - Confirm the generated steps survive reload and cloud comparison.
-- Verify setup, question, active-step, materials, and finished states at phone and desktop widths.
+- Verify question, active-step, materials, and finished states on a physical phone.
 - Check a provider failure leaves the task and schedule unchanged with a useful recovery message.

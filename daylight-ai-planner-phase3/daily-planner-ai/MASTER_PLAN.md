@@ -582,16 +582,16 @@ Deploy Preview 1 was checked at 390 × 844: bottom navigation remained anchored,
 
 This checkpoint is audited locally in `PHASE10B_AUDIT.md` and is intentionally held from another Netlify preview deployment to conserve credits.
 
-### Checkpoint 10C — one-screen Today design (implemented locally 2026-10-10)
+### Checkpoint 10C — one-screen Today design (verified on preview 2026-10-10)
 
 - Today is a bounded command center rather than a long page. Its schedule scrolls inside a dedicated region while the immediate action and essential controls remain visible.
 - The Now card and workload/capacity glance share one overview on wider screens and compress into a phone-sized hierarchy on narrow screens.
 - Phone headers, weekday controls, workload modes, quick add, planner status, and schedule heading were tightened without reducing the established touch targets.
 - Visual hierarchy uses one warm emphasis color, restrained surfaces, and progressive detail instead of adding more navigation layers.
 
-The production build and regression suite pass. Responsive preview inspection is batched with Guided Mode to conserve Netlify deploy credits; see `PHASE10C_AUDIT.md`.
+The production build and regression suite pass. Deploy Preview 1 was checked at 390 × 844 and 1280 × 800: the page did not scroll, the schedule had its own scroll region, immediate controls stayed visible, and no horizontal overflow appeared. Physical-device checks remain; see `PHASE10C_AUDIT.md`.
 
-### Checkpoint 11A — Guided Mode foundation (implemented locally 2026-10-10)
+### Checkpoint 11A — Guided Mode foundation (responsive preview verified 2026-10-10)
 
 - The Now card can open or resume a focused step-by-step guide without navigating away from Today.
 - Guide setup supports cooking, interview, study, project, and general contexts. The AI asks at most four material questions, then produces materials and 3–12 concrete steps.
@@ -599,7 +599,7 @@ The production build and regression suite pass. Responsive preview inspection is
 - Guide progress is saved with local state, backups, and cloud sync. Step completion is undoable. Finishing a guide does not silently complete or reschedule its source task.
 - The new account-protected Function validates origin, request size, category, and structured provider output. Its instructions prohibit high-risk procedural guidance and schedule changes.
 
-The complete regression suite and production build pass. Signed-in generation and responsive visual checks remain for the batched Deploy Preview; see `PHASE11A_AUDIT.md`.
+The complete regression suite and production build pass. Deploy Preview 1 passed the phone setup-flow inspection with no page overflow, and the final spacing correction keeps short forms top aligned. Signed-in cooking/interview generation and physical-phone execution checks remain; see `PHASE11A_AUDIT.md`.
 
 ### Checkpoint 4G — AI endpoint safeguards (implemented locally 2026-10-03)
 
