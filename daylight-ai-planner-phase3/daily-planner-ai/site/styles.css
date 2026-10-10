@@ -83,7 +83,7 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
 .assistant-panel > #planner-chat { min-height: 0; display: grid; grid-template-rows: auto 1fr auto; }
 .assistant-toggle { position: absolute; top: 18px; right: 18px; border: 0; background: #eaeae3; border-radius: 50%; width: 34px; height: 34px; display: grid; place-items: center; cursor: pointer; z-index: 2; }
 .assistant-panel.collapsed .assistant-toggle { right: 9px; }
-.assistant-head { padding: 24px 58px 17px 22px; border-bottom: 1px solid #e2e2db; }
+.assistant-head { padding: 24px 58px 17px 22px; border-bottom: 1px solid #e2e2db; display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
 .assistant-title { font-weight: 700; display: flex; gap: 8px; align-items: center; font-size: 14px; }
 .assistant-status { font-size: 11px; margin-top: 5px; color: #92928a; }
 .chat-thread { min-height: 0; overflow: auto; padding: 18px 16px 24px; }
@@ -102,12 +102,13 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .composer { padding: 12px 14px 15px; border-top: 1px solid #e0e0d9; position: relative; }
-.composer textarea { width: 100%; resize: none; border: 1px solid #d7d7cf; border-radius: 12px; background: white; padding: 11px 42px 11px 12px; outline: none; font-size: 12px; line-height: 1.45; }
+.composer textarea { width: 100%; resize: none; border: 1px solid #d7d7cf; border-radius: 12px; background: white; padding: 11px 12px; outline: none; font-size: 12px; line-height: 1.45; }
 .composer textarea:focus { border-color: #abab9f; box-shadow: 0 0 0 3px #00000008; }
-.composer > button { position: absolute; top: 21px; right: 23px; border: 0; background: #20201c; color: white; width: 29px; height: 29px; border-radius: 8px; display: grid; place-items: center; cursor: pointer; }
-.composer > button:disabled { opacity: .25; }
+.composer-actions { display:flex; gap:8px; margin-top:8px; }
+.composer-actions button { flex:1; min-height:38px; border:0; background:#20201c; color:#fff; border-radius:10px; display:grid; place-items:center; cursor:pointer; }
+.composer-actions button:disabled { opacity:.25; }
 .composer-hint { font-size: 9.5px; color: #9a9a92; margin: 6px 2px 0; }
-.composer > .voice-button { right: 58px; background: #ecece6; color: #242420; border: 1px solid #d7d7cf; }
+.composer-actions .voice-button { flex:0 0 48px; background:#ecece6; color:#242420; border:1px solid #d7d7cf; }
 .voice-button.listening, [data-voice].listening { background: #f6e4dc; color: #8b3f29; border-color: #d7a18e; }
 .voice-status { min-height: 16px; margin: 5px 2px 0; color: #8b3f29; font-size: 10px; line-height: 1.35; }
 .composer-tools { display: flex; justify-content: flex-end; margin: 2px 0 0; }
@@ -115,6 +116,13 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
 .composer-tools button:hover { color: #20201c; }
 .answer-context { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; border-radius: 8px; background: #f6f0df; color: #695a34; padding: 7px 9px; font-size: 10px; line-height: 1.4; }
 .answer-context button { border: 0; background: transparent; color: inherit; font-size: 16px; cursor: pointer; }
+.conversation-history-toggle { flex:0 0 auto; margin-top:1px; border:0; background:transparent; color:#74746c; font-size:10px; cursor:pointer; padding:3px; }
+.prompt-shortcuts { display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; }
+.prompt-shortcuts button { border:1px solid #d9d9d0; border-radius:999px; background:#fff; padding:7px 10px; color:#5e5e57; font-size:10px; cursor:pointer; }
+.prompt-shortcuts button:hover { border-color:#aaa99f; color:#20201c; }
+.app-notice { position:fixed; left:50%; bottom:24px; z-index:120; transform:translateX(-50%); max-width:min(90vw,520px); display:flex; align-items:center; gap:9px; border:1px solid #d8dfd2; border-radius:12px; background:#f7faf5; color:#40533a; box-shadow:0 10px 35px #0002; padding:11px 14px; font-size:12px; line-height:1.4; }
+.app-notice.warning { border-color:#e5d4ad; background:#fbf7eb; color:#725722; }
+.app-notice.error { border-color:#e3c1b8; background:#fcf2ef; color:#883f2f; }
 .quick-add { margin: 17px 46px 0; padding: 11px; display: flex; align-items: center; gap: 8px; border: 1px solid #e2e2da; border-radius: 10px; background: #fff; }
 .quick-add label { font-size: 11px; font-weight: 650; white-space: nowrap; }
 .quick-add input { flex: 1; min-width: 100px; }
@@ -391,10 +399,54 @@ h1 { font-size: 36px; line-height: 1; letter-spacing: -.045em; margin: 0; font-w
   .subtask { min-height:40px; font-size:14px; }
   .subtask input { width:20px; height:20px; }
   .composer textarea,.intake-composer textarea { font-size:16px; }
-  .composer > button { width:40px; height:40px; top:20px; right:20px; }
-  .composer > .voice-button { right:66px; }
-  .composer textarea { padding-right:108px; }
+  .composer-actions button { min-height:44px; font-size:16px; }
+  .composer-actions .voice-button { flex-basis:56px; }
   .composer-hint,.voice-status,.composer-tools button { font-size:12px; }
+}
+
+/* Milestone 10 — calm conversation and a phone-first shell */
+@media (max-width: 900px) {
+  body { padding-bottom:68px; }
+  .app-shell { min-height:calc(100vh - 68px); }
+  .sidebar { position:sticky; top:0; z-index:60; height:58px; padding:10px 16px; display:flex; flex-wrap:nowrap; align-items:center; border:0; border-bottom:1px solid #deded6; background:#f7f7f3; }
+  .brand { margin:0 auto 0 0; }
+  .sidebar nav { position:fixed; left:0; right:0; bottom:0; z-index:100; height:68px; display:grid; grid-template-columns:repeat(5,1fr); gap:0; padding:5px max(6px,env(safe-area-inset-right)) max(5px,env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-left)); border-top:1px solid #d9d9d1; background:#fbfbf8f5; backdrop-filter:blur(14px); box-shadow:0 -6px 24px #0000000b; }
+  .sidebar .nav-item { min-width:0; min-height:54px; padding:5px 2px; flex-direction:column; justify-content:center; gap:2px; border-radius:9px; font-size:10px; line-height:1.1; white-space:nowrap; }
+  .sidebar .nav-item .icon { font-size:18px; }
+  .sidebar .connection-state,.sidebar > .ghost-button,.sidebar > .mini-label,.sidebar > .rule-preview { display:none; }
+  .sidebar .account-details { flex:0 0 auto; margin:0; }
+  .sidebar .account-details summary { min-height:38px; padding:0 11px; }
+  .sidebar .account-details[open] summary { display:flex; }
+  .sidebar .account-box { position:fixed; z-index:110; top:62px; left:12px; right:12px; max-height:calc(100vh - 142px); overflow:auto; margin:0; padding:16px; grid-template-columns:1fr; box-shadow:0 16px 45px #0003; }
+  .main-panel { min-height:calc(100vh - 126px); }
+  .assistant-panel,.assistant-panel.collapsed { position:fixed; z-index:80; top:auto; left:auto; right:14px; bottom:78px; width:56px; height:56px; min-height:0; border:0; border-radius:50%; box-shadow:0 8px 28px #0003; overflow:hidden; }
+  .assistant-panel .assistant-toggle,.assistant-panel.collapsed .assistant-toggle { position:absolute; inset:0; width:56px; height:56px; right:auto; top:auto; border-radius:50%; background:#20201c; color:#fff; font-size:22px; }
+  .assistant-panel:not(.collapsed) { top:58px; left:0; right:0; bottom:68px; width:auto; height:auto; border-radius:18px 18px 0 0; border-top:1px solid #d4d4cc; box-shadow:0 -12px 48px #0003; background:#f8f8f4; }
+  .assistant-panel:not(.collapsed) .assistant-toggle { inset:14px 14px auto auto; width:38px; height:38px; background:#e8e8e1; color:#20201c; font-size:20px; }
+  .assistant-panel > #planner-chat { height:100%; }
+  .assistant-head { padding:19px 60px 15px 18px; }
+  .chat-thread { padding:16px 14px 22px; }
+  .bubble { max-width:88%; font-size:14px; }
+  .composer { padding:11px 13px max(13px,env(safe-area-inset-bottom)); background:#f8f8f4; }
+  .composer textarea { min-height:52px; }
+  .app-notice { bottom:82px; }
+}
+
+@media (max-width: 600px) {
+  .sidebar { padding-left:14px; padding-right:14px; }
+  .sidebar nav { overflow:visible; padding-top:5px; }
+  .topbar,.view-pad { padding-left:16px; padding-right:16px; }
+  .topbar { gap:16px; }
+  .quick-add,.day-summary,.day-mode,.planner-notice { margin-left:16px; margin-right:16px; }
+  .day-tabs,.timeline { padding-left:16px; padding-right:16px; }
+  .day-summary { margin-top:16px; }
+  .summary-stat { min-width:0; }
+  .summary-stat strong { font-size:14px; }
+  .timeline { padding-bottom:34px; }
+  .week-card { min-height:auto; }
+  .view-pad { padding-top:28px; }
+  .intake-composer { margin-top:20px; }
+  .intake-composer textarea { min-height:190px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

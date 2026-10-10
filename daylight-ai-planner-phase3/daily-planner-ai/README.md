@@ -108,9 +108,11 @@ If the provider rejects a request, Planner now shows the relevant error category
 
 ## Voice and data
 
-Tap the microphone in Planner or Inbox to dictate. Review the transcript before sending it. Browser speech recognition may use the browser vendor's speech service; availability depends on the browser and microphone permission. Spoken replies are optional.
+Tap the microphone in **Ask Daylight** to start a voice conversation. Daylight sends a completed speech turn automatically, speaks its reply, and listens for the next turn until you press Stop. Schedule changes still appear for review before they are applied. Inbox voice remains editable dictation for a longer brain dump. Browser speech recognition may use the browser vendor's speech service; availability depends on the browser and microphone permission.
 
-On narrow screens, the account form starts behind **Cloud sync** so the daily plan is easier to reach. Open it to accept an invitation or sign in. The main planning controls have larger tap areas and more readable text on phones.
+On narrow screens, Daylight uses bottom navigation and a floating assistant button. The assistant opens above the navigation as a focused conversation sheet. Account controls stay in the compact top bar so the daily plan remains the main surface.
+
+Routine actions show a short confirmation and are recorded in **History** instead of filling the assistant. The assistant shows recent conversational turns, with older turns available on demand.
 
 History keeps the last 20 planner undo checkpoints. Signed-in accounts also save the planner, Inbox, conversation, and undo history in Netlify Database. At first sign-in, Daylight asks whether to use the existing cloud plan or move this device’s plan to cloud. If two devices edit the same plan, automatic sync pauses for a choice. Use **Download backup** to save a JSON copy of planner data and history, or **Import backup** to restore one. Keep backups private. **Delete cloud copy** removes server data while leaving this device’s copy.
 

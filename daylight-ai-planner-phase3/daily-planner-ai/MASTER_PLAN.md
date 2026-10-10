@@ -562,6 +562,16 @@ This completes the locally planned Milestone 5 learning loop: observations, dura
 - The production build passed automated regression tests plus manual keyboard and accessibility-tree checks. A broader screen-reader and physical-device test matrix remains part of release readiness.
 - Deploy Preview 1 exposed the skip link, labeled navigation, current-page state, task-specific completion labels, focus styling, and reduced-motion rule at commit `94ea377`.
 
+### Checkpoint 9D / 10A — phone shell and calm assistant (implemented locally 2026-10-10)
+
+- Phones use persistent bottom navigation and a thumb-reachable assistant button. The assistant opens as a focused sheet above navigation while the day remains the primary screen.
+- Routine planner actions now show brief confirmations and remain available in History instead of extending the assistant transcript.
+- Ask Daylight displays recent conversational turns by default, exposes older conversation on demand, and offers common intent shortcuts.
+- Voice conversation sends a completed speech turn automatically, speaks the reply, and returns to listening until stopped. Schedule changes still require review. Browser speech recognition remains turn based; simultaneous interruption requires a later realtime audio integration.
+- Current competitor research and Daylight's calm-accuracy differentiation are recorded in `PRODUCT_RESEARCH.md`.
+
+Preview and physical-phone verification are required before this checkpoint is marked verified. Production remains unchanged until the batched release audit is complete.
+
 ### Checkpoint 4G — AI endpoint safeguards (implemented locally 2026-10-03)
 
 - Assistant and brain-dump AI requests now use the same signed-in origin check already used by goal breakdown and cloud write operations.

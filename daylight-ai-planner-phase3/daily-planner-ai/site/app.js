@@ -23,6 +23,7 @@ import { finishWork, reopenWork, skipWork, resumeWork, setActualTime } from './w
 import { durationSuggestion } from './duration-learning.js'
 import { workPattern, completionOutlook } from './work-patterns.js'
 import { sameCloudPayload } from './cloud-compare.js'
+import { selectConversationTurns } from './conversation-view.js'
 import { getUser, login, logout, handleAuthCallback, acceptInvite, refreshSession } from '@netlify/identity'
 
 const STORAGE_KEY = 'daylight-planner-v03-static'
@@ -152,14 +153,29 @@ function saveHistory() {
   }
   try { localStorage.removeItem(HISTORY_STORAGE_KEY) } catch { /* Storage may be unavailable. */ }
 }
+function normalizeConversationTurn(turn) {
+  if(!turn||!['user','assistant'].includes(turn.role)||typeof turn.text!=='string')return null
+  const clean={
+    id:typeof turn.id==='string'&&turn.id.length<=100?turn.id:uid(),
+    role:turn.role,
+    text:turn.text.slice(0,12000),
+    error:turn.error===true,
+  }
+  if(['conversation','activity'].includes(turn.kind))clean.kind=turn.kind
+  if(Array.isArray(turn.questions))clean.questions=turn.questions.filter(item=>typeof item==='string').slice(0,10).map(item=>item.slice(0,1000))
+  if(Array.isArray(turn.proposals))clean.proposals=turn.proposals.filter(item=>item&&typeof item==='object').slice(0,10).map(item=>({
+    action:String(item.action||'').slice(0,40),title:String(item.title||'').slice(0,300),day:String(item.day||'').slice(0,20),start:String(item.start||'').slice(0,10),durationMinutes:Number(item.durationMinutes)||0,details:String(item.details||'').slice(0,1000),
+  }))
+  return clean
+}
 function loadConversation() {
   try {
     const saved=JSON.parse(localStorage.getItem(CONVERSATION_STORAGE_KEY))
-    return Array.isArray(saved)?saved.filter(turn=>['user','assistant'].includes(turn?.role)&&typeof turn.text==='string').slice(-30):[]
+    return Array.isArray(saved)?saved.map(normalizeConversationTurn).filter(Boolean).slice(-30):[]
   } catch { return [] }
 }
 function saveConversation() {
-  try { localStorage.setItem(CONVERSATION_STORAGE_KEY,JSON.stringify(messages.slice(-30).map(({id,role,text,error})=>({id,role,text,error:!!error}))));queueCloudSave() }
+  try { localStorage.setItem(CONVERSATION_STORAGE_KEY,JSON.stringify(messages.slice(-30).map(({id,role,text,error,kind,proposals,questions})=>({id,role,text,error:!!error,kind,proposals,questions}))));queueCloudSave() }
   catch { /* The planner remains usable if browser storage is full. */ }
 }
 function exportBackup() {
@@ -191,14 +207,14 @@ async function importBackup(event) {
       undoStack=backup.history.filter(entry=>entry&&typeof entry.label==='string'&&entry.state&&typeof entry.state==='object')
       undoStack.push({label:'Before backup import',at:new Date().toISOString(),state:previousState})
       undoStack=undoStack.slice(-HISTORY_LIMIT)
-      messages=backup.conversation.filter(turn=>['user','assistant'].includes(turn?.role)&&typeof turn.text==='string')
+      messages=backup.conversation.map(normalizeConversationTurn).filter(Boolean)
       saveHistory()
     }
     save()
-    messages.push({id:uid(),role:'assistant',text:'Backup imported. Your previous planner is available through Undo.'})
+    setNotice('Backup imported. Your previous planner is available through Undo.')
     render()
   } catch(error) {
-    messages.push({id:uid(),role:'assistant',text:error.message||'The backup could not be imported.',error:true})
+    setNotice(error.message||'The backup could not be imported.','error')
     render()
   }
 }
@@ -217,11 +233,16 @@ let state = load()
 let undoStack = loadHistory()
 let selectedDay = detroitDay()
 let view = 'today'
-let chatOpen = true
+let chatOpen = !window.matchMedia('(max-width: 900px)').matches
+let conversationExpanded = false
 let sending = false
 let intakeSending = false
 let voiceSession = null
 let voiceTarget = ''
+let voiceConversation = false
+let voiceState = ''
+let voiceTurnText = ''
+let voiceTimer = 0
 let readRepliesAloud = false
 try { readRepliesAloud = localStorage.getItem('daylight-read-replies') === 'true' } catch { /* Browser storage may be unavailable. */ }
 let brainDumpText = ''
@@ -230,7 +251,9 @@ let intakeCaptureId = null
 let goalDraft = null
 let activeQuestionId = null
 let messages = loadConversation()
-if(!messages.length)messages=[{ id:'hello', role:'assistant', text:"Tell me what changed, what you need to get done, or how you're feeling about the day. I’ll interpret it, then the planning engine will find feasible time." }]
+if(!messages.length)messages=[{ id:'hello', role:'assistant', kind:'conversation', text:"Tell me what changed, what you need to get done, or how you're feeling about the day. I’ll interpret it, then the planning engine will find feasible time." }]
+let uiNotice = null
+let noticeTimer = 0
 let accountUser = null
 let accountStatus = 'Checking sign-in…'
 let accountError = ''
@@ -254,6 +277,16 @@ let offline = !navigator.onLine
 
 const app = document.querySelector('#app')
 
+function setNotice(text,tone='success') {
+  uiNotice={id:uid(),text,tone}
+  clearTimeout(noticeTimer)
+  const id=uiNotice.id
+  noticeTimer=setTimeout(()=>{if(uiNotice?.id===id){uiNotice=null;render()}},5000)
+}
+function conversationTurns() {
+  return selectConversationTurns(messages)
+}
+
 function render() {
   saveConversation()
   const main = view === 'today' ? todayView() : view === 'week' ? weekView() : view === 'goals' ? goalsView() : view === 'history' ? historyView() : inboxView()
@@ -261,7 +294,7 @@ function render() {
     ${sidebar()}
     <main class="main-panel" id="main-content" tabindex="-1">${main}</main>
     ${assistantPanel()}
-  </div>`
+  </div>${uiNotice?`<div class="app-notice ${attr(uiNotice.tone)}" role="status"><span aria-hidden="true">${uiNotice.tone==='error'?'!':'✓'}</span>${esc(uiNotice.text)}</div>`:''}`
   bindEvents()
   requestAnimationFrame(() => document.querySelector('.chat-thread')?.scrollTo(0, 1e9))
 }
@@ -330,7 +363,7 @@ async function responseData(response) {
 }
 
 function cloudPayload() {
-  return {state,history:undoStack,conversation:messages.slice(-30).map(({id,role,text,error})=>({id,role,text,error:!!error}))}
+  return {state,history:undoStack,conversation:messages.slice(-30).map(({id,role,text,error,kind,proposals,questions})=>({id,role,text,error:!!error,kind,proposals,questions}))}
 }
 function queueCloudSave() {
   if(!cloudReady || !accountUser)return
@@ -376,7 +409,7 @@ function applyCloudCopy(remote) {
   cloudReady=false
   state=migrate(remote.state)
   undoStack=Array.isArray(remote.history)?remote.history.slice(-HISTORY_LIMIT):[]
-  messages=Array.isArray(remote.conversation)&&remote.conversation.length?remote.conversation.slice(-30):messages
+  messages=Array.isArray(remote.conversation)&&remote.conversation.length?remote.conversation.map(normalizeConversationTurn).filter(Boolean).slice(-30):messages
   localStorage.setItem(STORAGE_KEY,JSON.stringify(state))
   localStorage.setItem(HISTORY_STORAGE_KEY,JSON.stringify(undoStack))
   saveConversation()
@@ -647,10 +680,14 @@ function inboxHistoryCard(item){
 }
 
 function assistantPanel() {
-  return `<aside class="assistant-panel ${chatOpen?'':'collapsed'}" aria-label="Planner assistant"><button class="assistant-toggle" data-action="chat-toggle" aria-label="${chatOpen?'Close planner assistant':'Open planner assistant'}" aria-expanded="${chatOpen}">◌</button>${chatOpen?`
-    <div id="planner-chat"><div class="assistant-head"><div class="assistant-title"><span class="icon" aria-hidden="true">✦</span> Planner</div><div class="assistant-status">AI understands intent · engine owns time arithmetic</div></div>
-    <div class="chat-thread" role="log" aria-label="Conversation with Planner">${messages.map(chatBubble).join('')}${sending?'<div class="thinking" role="status"><span class="spin" aria-hidden="true">↻</span> Interpreting what changed…</div>':''}</div>
-    <div class="composer">${activeQuestionId?`<div class="answer-context">Answering: ${esc(state.questions.find(item=>item.id===activeQuestionId)?.text||'Question')} <button data-action="cancel-answer" aria-label="Cancel answer">×</button></div>`:''}<label class="sr-only" for="chat-input">Message Planner</label><textarea id="chat-input" placeholder="${activeQuestionId?'Your answer…':"Tell me what's going on…"}" rows="3"></textarea><button data-action="send" aria-label="Send message">➤</button><button type="button" class="voice-button" data-voice="chat" aria-label="Speak to planner">🎙</button><div class="voice-status" data-voice-status="chat" aria-live="polite"></div><div class="composer-tools"><button type="button" data-action="read-aloud" aria-pressed="${readRepliesAloud}">${readRepliesAloud?'🔊 Voice replies on':'🔈 Read replies aloud'}</button></div><div class="composer-hint">Your browser handles voice transcription. Review the text, then send it. Proposed changes still need your approval.</div></div></div>`:''}</aside>`
+  const turns=conversationTurns()
+  const hiddenCount=Math.max(0,turns.length-4)
+  const visible=conversationExpanded?turns:turns.slice(-4)
+  const voiceLabel=voiceConversation?'End voice conversation':'Start voice conversation'
+  return `<aside class="assistant-panel ${chatOpen?'':'collapsed'} ${voiceConversation?'voice-active':''}" aria-label="Daylight assistant"><button class="assistant-toggle" data-action="chat-toggle" aria-label="${chatOpen?'Close Daylight assistant':'Open Daylight assistant'}" aria-expanded="${chatOpen}">${chatOpen?'×':'✦'}</button>${chatOpen?`
+    <div id="planner-chat"><div class="assistant-head"><div><div class="assistant-title"><span class="icon" aria-hidden="true">✦</span> Ask Daylight</div><div class="assistant-status">Describe the change. Daylight checks the plan before anything moves.</div></div>${hiddenCount?`<button class="conversation-history-toggle" data-action="conversation-history" aria-expanded="${conversationExpanded}">${conversationExpanded?'Show recent':`${hiddenCount} earlier`}</button>`:''}</div>
+    <div class="chat-thread" role="log" aria-label="Recent conversation with Daylight">${visible.map(chatBubble).join('')}${sending?'<div class="thinking" role="status"><span class="spin" aria-hidden="true">↻</span> Checking the plan…</div>':''}${turns.length<=1?`<div class="prompt-shortcuts" aria-label="Quick prompts"><button data-quick-prompt="My day changed. Help me replan from now.">My day changed</button><button data-quick-prompt="I am low on energy. Make today realistic.">Low energy</button><button data-quick-prompt="What is the most important thing to do next?">What next?</button></div>`:''}</div>
+    <div class="composer">${activeQuestionId?`<div class="answer-context">Answering: ${esc(state.questions.find(item=>item.id===activeQuestionId)?.text||'Question')} <button data-action="cancel-answer" aria-label="Cancel answer">×</button></div>`:''}<label class="sr-only" for="chat-input">Message Daylight</label><textarea id="chat-input" placeholder="${activeQuestionId?'Your answer…':"Tell Daylight what changed…"}" rows="2"></textarea><div class="composer-actions"><button data-action="send" aria-label="Send message">➤</button><button type="button" class="voice-button ${voiceConversation?'listening':''}" data-voice="chat" aria-label="${voiceLabel}" aria-pressed="${voiceConversation}">${voiceConversation?'■':'🎙'}</button></div><div class="voice-status" data-voice-status="chat" aria-live="polite">${esc(voiceState)}</div><div class="composer-tools"><button type="button" data-action="read-aloud" aria-pressed="${readRepliesAloud}">${readRepliesAloud?'🔊 Typed replies spoken':'🔈 Speak typed replies'}</button></div><div class="composer-hint">Voice sends automatically when you finish speaking. Schedule changes still wait for review.</div></div></div>`:''}</aside>`
 }
 function chatBubble(m) {
   return `<div class="bubble-wrap ${m.role}"><div class="bubble">${esc(m.text)}</div>${m.proposals?.length?`<div class="proposal-list">${m.proposals.map((p,i)=>proposalCard(p,i,m.id)).join('')}</div>`:''}${m.questions?.map(q=>`<div class="question-chip">${esc(q)}</div>`).join('')||''}</div>`
@@ -669,7 +706,7 @@ function bindEvents() {
   document.querySelector('[data-action="install-app"]')?.addEventListener('click',installDaylight)
   document.querySelector('[data-action="use-cloud"]')?.addEventListener('click',()=>{if(!cloudCopy?.exists)return;if(!confirm('Use the cloud plan on this device? Your current device plan will be replaced. Export a backup first if you want to keep it.'))return;applyCloudCopy(cloudCopy);render()})
   document.querySelector('[data-action="use-local"]')?.addEventListener('click',()=>{if(cloudCopy?.exists&&!confirm('Replace the cloud plan with this device’s plan? The previous cloud plan will be replaced.'))return;saveToCloud(true).then(()=>render())})
-  document.querySelectorAll('[data-view]').forEach(el=>el.onclick=()=>{stopVoice();view=el.dataset.view;render()})
+  document.querySelectorAll('[data-view]').forEach(el=>el.onclick=()=>{endVoiceConversation();view=el.dataset.view;render()})
   document.querySelectorAll('[data-day]').forEach(el=>el.onclick=()=>{selectedDay=el.dataset.day;render()})
   document.querySelectorAll('[data-day-mode]').forEach(el=>el.onclick=()=>setDayMode(el.dataset.dayMode))
   document.querySelectorAll('[data-open-day]').forEach(el=>el.onclick=()=>{selectedDay=el.dataset.openDay;view='today';render()})
@@ -686,7 +723,7 @@ function bindEvents() {
   document.querySelectorAll('[data-apply]').forEach(el=>el.onclick=()=>{
     const [messageId,index]=el.dataset.apply.split(':'); const m=messages.find(m=>m.id===messageId); if(m?.proposals?.[Number(index)]) applyProposal(m.proposals[Number(index)])
   })
-  document.querySelector('[data-action="reset"]')?.addEventListener('click',()=>{pushUndo('Before reset');state=clone(initialState);intakeDraft=null;intakeCaptureId=null;goalDraft=null;brainDumpText='';save();messages.push({id:uid(),role:'assistant',text:'Prototype data restored.'});render()})
+  document.querySelector('[data-action="reset"]')?.addEventListener('click',()=>{pushUndo('Before reset');state=clone(initialState);intakeDraft=null;intakeCaptureId=null;goalDraft=null;brainDumpText='';save();setNotice('Prototype data restored.');render()})
   document.querySelector('[data-action="undo"]')?.addEventListener('click',undoLast)
   document.querySelector('[data-action="undo-history"]')?.addEventListener('click',undoLast)
   document.querySelector('[data-action="load-snapshots"]')?.addEventListener('click',loadCloudSnapshots)
@@ -695,12 +732,14 @@ function bindEvents() {
   document.querySelector('[data-action="confirm-restore"]')?.addEventListener('click',()=>restoreCloudSnapshot(snapshotConfirmRevision))
   document.querySelector('[data-action="export-backup"]')?.addEventListener('click',exportBackup)
   document.querySelector('#import-backup')?.addEventListener('change',importBackup)
-  document.querySelector('[data-action="chat-toggle"]')?.addEventListener('click',()=>{stopVoice();chatOpen=!chatOpen;render()})
+  document.querySelector('[data-action="chat-toggle"]')?.addEventListener('click',()=>{endVoiceConversation();chatOpen=!chatOpen;render()})
+  document.querySelector('[data-action="conversation-history"]')?.addEventListener('click',()=>{conversationExpanded=!conversationExpanded;render()})
   document.querySelector('[data-action="plan-day"]')?.addEventListener('click',()=>runPlanner({label:`Replanned ${selectedDay}`,startDay:selectedDay}))
   document.querySelector('[data-action="plan-week"]')?.addEventListener('click',()=>runPlanner({label:'Replanned the week',startDay:'Monday'}))
   document.querySelector('[data-action="reality"]')?.addEventListener('click',runRealityMode)
   document.querySelector('[data-action="send"]')?.addEventListener('click',()=>sendMessage())
   document.querySelectorAll('[data-voice]').forEach(el=>el.addEventListener('click',()=>toggleVoice(el.dataset.voice)))
+  document.querySelectorAll('[data-quick-prompt]').forEach(el=>el.addEventListener('click',()=>sendMessage(el.dataset.quickPrompt)))
   document.querySelector('[data-action="read-aloud"]')?.addEventListener('click',()=>{readRepliesAloud=!readRepliesAloud;try{localStorage.setItem('daylight-read-replies',String(readRepliesAloud))}catch{};if(!readRepliesAloud)globalThis.speechSynthesis?.cancel();render()})
   document.querySelector('[data-action="cancel-answer"]')?.addEventListener('click',()=>{activeQuestionId=null;render()})
   document.querySelectorAll('[data-answer-question]').forEach(el=>el.addEventListener('click',()=>{activeQuestionId=el.dataset.answerQuestion;chatOpen=true;render();document.querySelector('#chat-input')?.focus()}))
@@ -828,7 +867,7 @@ function saveGoalBreakdown(schedule){
   }
   save()
   const added=target.roadmap.scheduledTaskId&&state.items.find(item=>item.id===target.roadmap.scheduledTaskId)
-  messages.push({id:uid(),role:'assistant',text:scheduled?`I saved a path for ${target.title}. ${added?.unscheduled?'Its first step needs a free slot; I kept your fixed commitments and protected free time in place.':'Its first step is in your plan.'}`:scheduledTaskId?`I saved the updated path for ${target.title}. ${added?.unscheduled?'Its first step still needs a free slot.':'Its first step is in your plan.'}`:`I saved a path for ${target.title}. You can choose when to place the next step in your plan.`})
+  setNotice(scheduled?`Path saved for ${target.title}. ${added?.unscheduled?'The first step still needs a slot.':'The first step is in your plan.'}`:scheduledTaskId?`Path updated for ${target.title}.`:`Path saved for ${target.title}.`)
   goalDraft=null
   render()
 }
@@ -848,7 +887,7 @@ function undoLast() {
   pendingOperation=null
   saveHistory()
   save()
-  messages.push({id:uid(),role:'assistant',text:`Undid: ${previous.label}.`})
+  setNotice(`Undid: ${previous.label}.`)
   render()
 }
 
@@ -861,7 +900,7 @@ function runPlanner({label,startDay}) {
   const moved=result.changes.filter(c=>c.type==='move'||c.type==='schedule').length
   const split=result.changes.filter(c=>c.type==='split').length
   const unresolved=result.unscheduled.length
-  messages.push({id:uid(),role:'assistant',text:plannerSummary(moved,split,unresolved)})
+  setNotice(plannerSummary(moved,split,unresolved),unresolved?'warning':'success')
   render()
 }
 function setDayMode(mode) {
@@ -873,7 +912,7 @@ function setDayMode(mode) {
   state.items=result.items
   state.lastPlan={label:`${MODE_LABELS[mode]} day on ${selectedDay}`,changes:result.changes,unscheduled:result.unscheduled,at:'just now'}
   save()
-  messages.push({id:uid(),role:'assistant',text:`${MODE_LABELS[mode]} day is on for ${selectedDay}. ${MODE_HINTS[mode]} ${result.unscheduled.length?`${result.unscheduled.length} flexible item${result.unscheduled.length===1?' needs':'s need'} another slot.`:'Fixed commitments and protected free time remain in place.'}`})
+  setNotice(`${MODE_LABELS[mode]} day is on for ${selectedDay}. ${result.unscheduled.length?`${result.unscheduled.length} flexible item${result.unscheduled.length===1?' needs':'s need'} another slot.`:'The plan still fits.'}`,result.unscheduled.length?'warning':'success')
   render()
 }
 function runRealityMode() {
@@ -885,7 +924,7 @@ function runRealityMode() {
   state.lastPlan={label:`Reality mode · ${selectedDay}`,changes:result.changes,unscheduled:result.unscheduled,at:selectedDay===nowDay?`from ${displayTime(minutesToTime(now))}`:'from the start of the day'}
   save()
   const unresolved=result.unscheduled.length
-  messages.push({id:uid(),role:'assistant',text:`I replanned forward from ${selectedDay===nowDay?'now':'the start of the day'}, kept fixed commitments anchored, and preserved the free-time target.${unresolved?` ${unresolved} item${unresolved===1?'':'s'} still can’t fit without breaking those constraints.`:''}`})
+  setNotice(`Replanned ${selectedDay===nowDay?'from now':'from the start of the day'}. Fixed commitments and free time stayed protected.${unresolved?` ${unresolved} item${unresolved===1?' still needs':'s still need'} a slot.`:''}`,unresolved?'warning':'success')
   render()
 }
 function plannerSummary(moved,split,unresolved) {
@@ -939,7 +978,7 @@ function applyDurationSuggestion(id){
   state.items=result.items
   state.lastPlan={label:`Updated estimate for ${item.title}`,changes:result.changes,unscheduled:result.unscheduled,at:'just now'}
   save()
-  messages.push({id:uid(),role:'assistant',text:`I changed ${item.title} to a ${formatMinutes(suggestion.suggestedMinutes)} estimate and replanned flexible work. ${result.unscheduled.length?`${result.unscheduled.length} item${result.unscheduled.length===1?' still needs':'s still need'} a slot.`:'Fixed commitments and protected free time stayed in place.'}`})
+  setNotice(`${item.title} now uses a ${formatMinutes(suggestion.suggestedMinutes)} estimate.${result.unscheduled.length?` ${result.unscheduled.length} item${result.unscheduled.length===1?' still needs':'s still need'} a slot.`:' The updated plan fits.'}`,result.unscheduled.length?'warning':'success')
   render()
 }
 function ignoreDurationSuggestion(id){
@@ -967,7 +1006,7 @@ function applyWindowSuggestion(id){
   state.items=result.items
   state.lastPlan={label:`Preferred ${suggestion.band} for ${item.title}`,changes:result.changes,unscheduled:result.unscheduled,at:'just now'}
   save()
-  messages.push({id:uid(),role:'assistant',text:`I set ${item.title} to prefer ${suggestion.band} and replanned flexible work. ${result.unscheduled.length?`${result.unscheduled.length} item${result.unscheduled.length===1?' still needs':'s still need'} a slot.`:'Fixed commitments and protected free time stayed in place.'}`})
+  setNotice(`${item.title} now prefers the ${suggestion.band}.${result.unscheduled.length?` ${result.unscheduled.length} item${result.unscheduled.length===1?' still needs':'s still need'} a slot.`:' The updated plan fits.'}`,result.unscheduled.length?'warning':'success')
   render()
 }
 function ignoreWindowSuggestion(id){
@@ -1027,7 +1066,7 @@ function applyIntakeDraft(){
   state.lastPlan={label:'Planned accepted brain dump items',changes:scheduler.changes,unscheduled:scheduler.unscheduled,at:'just now'}
   save()
   const remaining=state.inbox[captureIndex]?.review?.items?.length||0
-  messages.push({id:uid(),role:'assistant',text:`I added ${result.applied.length} reviewed item${result.applied.length===1?'':'s'} to your planner and ran the scheduling engine. ${scheduler.unscheduled.length?scheduler.unscheduled.length+' flexible item'+(scheduler.unscheduled.length===1?'':'s')+' could not fit without breaking your constraints. ':''}${remaining?remaining+' item'+(remaining===1?' is':'s are')+' saved in Inbox for later review.':''}`})
+  setNotice(`${result.applied.length} reviewed item${result.applied.length===1?'':'s'} added.${scheduler.unscheduled.length?` ${scheduler.unscheduled.length} still need a slot.`:''}${remaining?` ${remaining} saved in Inbox for later.`:''}`,scheduler.unscheduled.length?'warning':'success')
   intakeDraft=null
   intakeCaptureId=null
   brainDumpText=''
@@ -1035,25 +1074,38 @@ function applyIntakeDraft(){
   render()
 }
 
-async function sendMessage(explicit='') {
+async function sendMessage(explicit='',options={}) {
   const textarea=document.querySelector('#chat-input')
   const text=(explicit || textarea?.value || '').trim(); if(!text||sending)return
+  const voiceTurn=options.voice===true
   const answering=state.questions.find(item=>item.id===activeQuestionId&&item.status==='pending')
-  messages.push({id:uid(),role:'user',text}); sending=true; render()
+  messages.push({id:uid(),role:'user',kind:'conversation',text}); conversationExpanded=false; sending=true
+  if(voiceTurn)voiceState='Checking the plan…'
+  render()
+  let replyText=''
   try {
-    const history=messages.slice(-9,-1).filter(m=>m.id!=='hello'&&(m.role==='user'||(m.role==='assistant'&&!m.error))).map(m=>({role:m.role,text:m.text}))
+    const history=conversationTurns().slice(-9,-1).filter(m=>m.id!=='hello'&&(m.role==='user'||(m.role==='assistant'&&!m.error))).map(m=>({role:m.role,text:m.text}))
     const message=answering?`Answer to your earlier question "${answering.text}": ${text}`:text
     const res=await accountFetch('/api/assistant',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message,history,selectedDay,todayDay:new Intl.DateTimeFormat('en-US',{weekday:'long'}).format(new Date()),now:new Date().toISOString(),state})})
     if(!res.ok) throw await apiError(res)
-    const data=await res.json(); messages.push({id:uid(),role:'assistant',text:data.reply,proposals:data.proposals,questions:data.questions});speakReply(data.reply)
+    const data=await res.json(); replyText=data.reply; messages.push({id:uid(),role:'assistant',kind:'conversation',text:data.reply,proposals:data.proposals,questions:data.questions})
     if(answering){pushUndo('Answered a question');state.questions=resolveQuestion(state.questions,answering.id,'answered');activeQuestionId=null}
     const nextQuestions=captureQuestions(state.questions,data.questions,{idFactory:uid})
     if(!answering&&JSON.stringify(nextQuestions)!==JSON.stringify(state.questions))pushUndo('Planner asked a question')
     state.questions=nextQuestions
     save()
   } catch(err) {
-    messages.push({id:uid(),role:'assistant',text:connectionErrorMessage(err),error:true})
-  } finally { sending=false; render() }
+    messages.push({id:uid(),role:'assistant',kind:'conversation',text:connectionErrorMessage(err),error:true})
+    if(voiceTurn){voiceConversation=false;voiceState='Voice conversation stopped. Try again when the connection is ready.'}
+  } finally {
+    sending=false
+    if(voiceTurn&&replyText&&voiceConversation)voiceState='Speaking…'
+    render()
+    if(replyText){
+      const continueVoice=voiceTurn&&voiceConversation
+      speakReply(replyText,{force:continueVoice,onEnd:continueVoice?()=>{if(voiceConversation)beginVoiceTurn()}:null})
+    }
+  }
 }
 
 async function apiError(response) {
@@ -1072,60 +1124,97 @@ function connectionErrorMessage(error) {
   if(error.status===429) return 'The AI service is busy or has reached a rate limit. Please try again shortly.'
   return 'I couldn’t reach the AI right now. Your planner still works; please try again shortly.'
 }
-function speakReply(text) {
-  if(!readRepliesAloud||!globalThis.speechSynthesis||!globalThis.SpeechSynthesisUtterance||!text)return
+function speakReply(text,{force=false,onEnd=null}={}) {
+  if(!(force||readRepliesAloud)||!globalThis.speechSynthesis||!globalThis.SpeechSynthesisUtterance||!text){onEnd?.();return false}
   globalThis.speechSynthesis.cancel()
   const utterance=new SpeechSynthesisUtterance(String(text).slice(0,900))
   utterance.rate=1
+  utterance.onend=()=>onEnd?.()
+  utterance.onerror=()=>onEnd?.()
   globalThis.speechSynthesis.speak(utterance)
+  return true
 }
 function stopVoice() {
-  if(!voiceSession)return
-  const session=voiceSession
-  voiceSession=null
-  voiceTarget=''
-  session.stop()
-  updateVoiceUI('')
+  clearTimeout(voiceTimer);voiceTimer=0
+  if(voiceSession){const session=voiceSession;voiceSession=null;try{session.abort()}catch{try{session.stop()}catch{}}}
+  voiceTarget='';voiceTurnText=''
+  updateVoiceUI(voiceState)
+}
+function endVoiceConversation(message='') {
+  voiceConversation=false
+  voiceState=message
+  globalThis.speechSynthesis?.cancel()
+  stopVoice()
 }
 function updateVoiceUI(status) {
+  voiceState=status
   document.querySelectorAll('[data-voice]').forEach(button=>{
-    const active=button.dataset.voice===voiceTarget
+    const active=button.dataset.voice==='chat'?voiceConversation:button.dataset.voice===voiceTarget
     button.classList.toggle('listening',active)
     button.setAttribute('aria-pressed',String(active))
-    button.setAttribute('aria-label',active?'Stop listening':button.dataset.voice==='chat'?'Speak to planner':'Speak brain dump')
+    button.setAttribute('aria-label',button.dataset.voice==='chat'?(voiceConversation?'End voice conversation':'Start voice conversation'):(active?'Stop listening':'Speak brain dump'))
   })
-  document.querySelectorAll('[data-voice-status]').forEach(node=>{node.textContent=node.dataset.voiceStatus===voiceTarget?status:''})
+  document.querySelectorAll('[data-voice-status]').forEach(node=>{node.textContent=node.dataset.voiceStatus==='chat'?voiceState:node.dataset.voiceStatus===voiceTarget?status:''})
 }
 function toggleVoice(target) {
+  if(target==='chat'){
+    if(voiceConversation){endVoiceConversation('Voice conversation ended.');render();return}
+    voiceConversation=true;chatOpen=true;voiceState='Starting microphone…';render();requestAnimationFrame(beginVoiceTurn);return
+  }
   if(voiceSession){stopVoice();return}
+  startRecognition(target,false)
+}
+function beginVoiceTurn(){
+  if(!voiceConversation||sending||voiceSession)return
+  voiceState='Listening…'
+  startRecognition('chat',true)
+}
+function startRecognition(target,autoSend) {
   const Recognition=globalThis.SpeechRecognition||globalThis.webkitSpeechRecognition
   const statusNode=document.querySelector(`[data-voice-status="${target}"]`)
-  if(!Recognition){if(statusNode)statusNode.textContent='Voice input is unavailable in this browser. You can still type here.';return}
+  if(!Recognition){if(autoSend)voiceConversation=false;updateVoiceUI('Voice input is unavailable in this browser. You can still type here.');return}
   const recognition=new Recognition()
   recognition.lang=navigator.language||'en-US'
   recognition.interimResults=true
   recognition.continuous=false
   voiceSession=recognition
   voiceTarget=target
+  voiceTurnText=''
+  const input=document.querySelector(target==='chat'?'#chat-input':'#brain-dump-input')
+  const startingText=autoSend?'':(input?.value||'').trim()
   recognition.onresult=event=>{
     let final='',interim=''
-    for(let i=event.resultIndex;i<event.results.length;i++){
+    for(let i=0;i<event.results.length;i++){
       const words=event.results[i][0]?.transcript||''
       if(event.results[i].isFinal)final+=words
       else interim+=words
     }
-    if(final){
-      const input=document.querySelector(target==='chat'?'#chat-input':'#brain-dump-input')
-      if(input){input.value=`${input.value.trim()} ${final.trim()}`.trim();input.dispatchEvent(new Event('input',{bubbles:true}));if(target==='inbox')brainDumpText=input.value}
-    }
-    updateVoiceUI(interim?`Listening: ${interim}`:'Listening…')
+    voiceTurnText=`${final} ${interim}`.trim()
+    if(input){input.value=`${startingText} ${voiceTurnText}`.trim();input.dispatchEvent(new Event('input',{bubbles:true}));if(target==='inbox')brainDumpText=input.value}
+    updateVoiceUI(voiceTurnText?`Listening · ${voiceTurnText}`:'Listening…')
+    if(final.trim()){clearTimeout(voiceTimer);voiceTimer=setTimeout(()=>{if(voiceSession===recognition)try{recognition.stop()}catch{}},700)}
   }
   recognition.onerror=event=>{
-    voiceSession=null;voiceTarget='';updateVoiceUI('')
-    if(statusNode)statusNode.textContent=event.error==='not-allowed'?'Microphone access was denied. Allow it in your browser to use voice.':'Voice input stopped. Please try again or type instead.'
+    if(voiceSession===recognition)voiceSession=null
+    clearTimeout(voiceTimer);voiceTimer=0;voiceTarget=''
+    if(autoSend)voiceConversation=false
+    const message=event.error==='not-allowed'?'Microphone access was denied. Allow it in your browser to use voice.':event.error==='no-speech'?'I didn’t hear anything. Tap the microphone to try again.':'Voice stopped unexpectedly. Tap the microphone to try again.'
+    updateVoiceUI(message);render()
   }
-  recognition.onend=()=>{if(voiceSession===recognition){voiceSession=null;voiceTarget='';updateVoiceUI('')}}
-  try{recognition.start();updateVoiceUI('Listening…')}catch{voiceSession=null;voiceTarget='';updateVoiceUI('');if(statusNode)statusNode.textContent='Voice input could not start in this browser.'}
+  recognition.onend=()=>{
+    if(voiceSession!==recognition)return
+    voiceSession=null;clearTimeout(voiceTimer);voiceTimer=0;voiceTarget=''
+    const transcript=voiceTurnText.trim();voiceTurnText=''
+    if(autoSend&&voiceConversation&&transcript){voiceState='Sending…';sendMessage(transcript,{voice:true})}
+    else if(autoSend){voiceConversation=false;updateVoiceUI('I didn’t catch that. Tap the microphone to try again.');render()}
+    else updateVoiceUI('')
+  }
+  try{
+    recognition.start();updateVoiceUI('Listening…')
+    clearTimeout(voiceTimer);voiceTimer=setTimeout(()=>{if(voiceSession===recognition)try{recognition.stop()}catch{}},15000)
+  }catch{
+    voiceSession=null;voiceTarget='';if(autoSend)voiceConversation=false;updateVoiceUI('Voice input could not start in this browser.');if(statusNode)statusNode.textContent=voiceState;render()
+  }
 }
 function quickAddTask(event) {
   event.preventDefault()
@@ -1141,7 +1230,7 @@ function quickAddTask(event) {
   state.items=result.items
   state.lastPlan={label:`Added ${title}`,changes:result.changes,unscheduled:result.unscheduled,at:'just now'}
   save()
-  messages.push({id:uid(),role:'assistant',text:result.unscheduled.some(i=>i.title===title)?`I added ${title} to your planner, but it needs a slot. I kept your fixed commitments and protected free time intact.`:`I added ${title} and found a feasible slot on ${selectedDay}.`})
+  setNotice(result.unscheduled.some(i=>i.title===title)?`${title} was added, but it still needs a slot.`:`${title} was added to ${selectedDay}.`,result.unscheduled.some(i=>i.title===title)?'warning':'success')
   render()
 }
 
@@ -1185,14 +1274,14 @@ function applyProposal(p) {
     return
   }
   save()
-  if(p.action!=='create'||p.kind==='event')messages.push({id:uid(),role:'assistant',text:`Applied: ${p.title||p.details}`})
+  if(p.action!=='create'||p.kind==='event')setNotice(`Applied: ${p.title||p.details}`)
   render()
 }
 function executeEngineAfterProposal(startDay,label) {
   const result=planWeek(state.items,planningConfig(),{startDay,idFactory:uid})
   state.items=result.items
   state.lastPlan={label,changes:result.changes,unscheduled:result.unscheduled,at:'just now'}
-  messages.push({id:uid(),role:'assistant',text:result.unscheduled.length?`I added it, but the engine could not place ${result.unscheduled.length} item without breaking your constraints.`:'Added it and fit it into the schedule without moving fixed commitments.'})
+  setNotice(result.unscheduled.length?`Added, but ${result.unscheduled.length} item${result.unscheduled.length===1?' still needs':'s still need'} a slot.`:'Added and fitted into the schedule.',result.unscheduled.length?'warning':'success')
 }
 
 function typeLabel(value){return ({event:'event',task:'task',routine:'routine',rule:'rule',goal:'goal',metric:'metric',open_loop:'open loop'})[value]||value}
