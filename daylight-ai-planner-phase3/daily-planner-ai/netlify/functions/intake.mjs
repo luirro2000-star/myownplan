@@ -1,3 +1,5 @@
+import { getUser, verifyRequestOrigin } from '@netlify/identity'
+
 const days = ['Monday','Tuesday','Wednesday','Thursday','Friday']
 
 const entryProperties = {
@@ -43,13 +45,22 @@ const responseSchema = {
   required: ['summary','understood','questions'],
 }
 
-export default async (req) => {
+export async function handleIntake(req, { currentUser = getUser, checkOrigin = verifyRequestOrigin } = {}) {
   if (req.method !== 'POST') return Response.json({ error: 'Method not allowed' }, { status: 405 })
+  if (!(await currentUser())?.id) return Response.json({ code: 'unauthorized', error: 'Sign in to use AI intake.' }, { status: 401 })
+  try { checkOrigin(req) } catch { return Response.json({ code: 'invalid_origin' }, { status: 403 }) }
   const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) return Response.json({ error: 'ANTHROPIC_API_KEY is not configured.' }, { status: 500 })
+  if (!apiKey) return Response.json({ code: 'missing_key', error: 'The AI key is missing from the Functions environment.' }, { status: 503 })
 
-  const { text, state, now } = await req.json()
+  let input
+  try {
+    const raw = await req.text()
+    if (raw.length > 1_000_000) return Response.json({ code: 'too_large' }, { status: 413 })
+    input = JSON.parse(raw)
+  } catch { return Response.json({ code: 'invalid_request', error: 'Expected JSON.' }, { status: 400 }) }
+  const { text, state, now } = input || {}
   if (!String(text || '').trim()) return Response.json({ error: 'Brain dump is empty.' }, { status: 400 })
+  if (String(text).length > 30_000) return Response.json({ code: 'too_large', error: 'Brain dump is too long.' }, { status: 413 })
 
   const system = `You are the intake interpreter for Daylight, a conversational life planner.
 The user will paste messy notes about their schedule, responsibilities, habits, goals, rules, metrics, worries, and vague intentions. Convert the notes into reviewable planning objects without prematurely forcing everything onto a calendar.
@@ -86,7 +97,8 @@ Current local timestamp: ${now || ''}
 Supported schedule weekdays: ${days.join(', ')}
 Existing planner state: ${JSON.stringify(state || {})}`
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  let response
+  try { response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -100,13 +112,21 @@ Existing planner state: ${JSON.stringify(state || {})}`
       messages: [{ role: 'user', content: String(text) }],
       output_config: { effort: 'medium', format: { type: 'json_schema', schema: responseSchema } },
     }),
-  })
+  }) } catch { return Response.json({ code: 'provider_unreachable', error: 'The AI provider could not be reached.' }, { status: 502 }) }
 
-  if (!response.ok) return Response.json({ error: 'Anthropic request failed', details: await response.text() }, { status: 502 })
-  const data = await response.json()
+  if (!response.ok) {
+    let providerError={}
+    try { providerError=await response.json() } catch { /* Keep the status. */ }
+    console.error('Anthropic intake failed',response.status,providerError?.error?.type||'unknown')
+    const code=response.status===401||response.status===403?'provider_auth':response.status===402?'provider_balance':response.status===404?'provider_model':response.status===429?'provider_rate_limit':'provider_request'
+    return Response.json({ code, error:'The AI provider could not process the request.' }, { status:response.status===429?429:502 })
+  }
+  let data
+  try { data=await response.json() } catch { return Response.json({ code:'provider_response', error:'The AI provider returned unreadable data.' }, { status:502 }) }
   const output = data.content?.find(block => block.type === 'text')?.text
   if (!output) return Response.json({ error: 'No structured intake returned.' }, { status: 502 })
   return new Response(output, { headers: { 'content-type': 'application/json' } })
 }
 
+export default req => handleIntake(req)
 export const config = { path: '/api/intake' }

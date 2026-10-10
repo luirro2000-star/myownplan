@@ -1,3 +1,5 @@
+import { getUser, verifyRequestOrigin } from '@netlify/identity'
+
 const responseSchema = {
   type: 'object',
   additionalProperties: false,
@@ -33,15 +35,22 @@ const responseSchema = {
   required: ['reply','proposals','questions'],
 }
 
-export default async (req) => {
+export async function handleAssistant(req, { currentUser = getUser, checkOrigin = verifyRequestOrigin } = {}) {
   if (req.method !== 'POST') return Response.json({ error: 'Method not allowed' }, { status: 405 })
+  if (!(await currentUser())?.id) return Response.json({ code: 'unauthorized', error: 'Sign in to use the AI planner.' }, { status: 401 })
+  try { checkOrigin(req) } catch { return Response.json({ code: 'invalid_origin' }, { status: 403 }) }
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return Response.json({ code: 'missing_key', error: 'The AI key is missing from the Functions environment.' }, { status: 503 })
 
   let input
-  try { input = await req.json() } catch { return Response.json({ code: 'invalid_request', error: 'Expected JSON.' }, { status: 400 }) }
-  const { message, state, selectedDay, now, history } = input || {}
+  try {
+    const raw = await req.text()
+    if (raw.length > 1_000_000) return Response.json({ code: 'too_large' }, { status: 413 })
+    input = JSON.parse(raw)
+  } catch { return Response.json({ code: 'invalid_request', error: 'Expected JSON.' }, { status: 400 }) }
+  const { message, state, selectedDay, todayDay, now, history } = input || {}
   if (!String(message || '').trim()) return Response.json({ code: 'invalid_request', error: 'Message is empty.' }, { status: 400 })
+  if (String(message).length > 4000) return Response.json({ code: 'too_large' }, { status: 413 })
   const conversation = []
   for (const turn of Array.isArray(history) ? history.slice(-8) : []) {
     if (!['user','assistant'].includes(turn?.role) || typeof turn.text !== 'string') continue
@@ -63,6 +72,7 @@ Rules:
 - Preserve intentional free time. Do not pack every open minute.
 - If a time is materially ambiguous, ask one short question rather than silently deciding.
 - When the day went wrong, plan forward from now; do not try to repair the past.
+- The selected day can be different from the user's current local weekday. Never describe a selected day's blocks as underway or over when it is not the current weekday.
 - Use 24-hour HH:MM for start/end. Use empty strings when a time is not appropriate.
 - For flexible tasks, prefer giving duration/deadline/priority/preferences and leave exact start/end empty unless the user explicitly fixes that time. The deterministic planner will place it.
 - priority is 1 low, 2 normal, 3 high, 4 critical. deadlineDay is a weekday or empty. splittable means the work can be broken into multiple blocks.
@@ -72,6 +82,7 @@ Rules:
 - Ask only questions that materially block a useful plan.
 
 Selected day: ${selectedDay}
+Current local weekday: ${['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].includes(todayDay) ? todayDay : 'unknown'}
 Current client time: ${now}
 Planner state: ${JSON.stringify(state)}`
 
@@ -111,4 +122,5 @@ Planner state: ${JSON.stringify(state)}`
   return new Response(text, { headers: { 'content-type': 'application/json' } })
 }
 
+export default req => handleAssistant(req)
 export const config = { path: '/api/assistant' }

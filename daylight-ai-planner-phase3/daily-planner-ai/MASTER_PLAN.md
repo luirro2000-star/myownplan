@@ -450,4 +450,184 @@ Alongside that foundation, goal decomposition should become the first higher-lev
 - Quick task entry without AI, scheduled through the deterministic engine.
 - Persistent local undo history and manual JSON backup export/import.
 
-These changes do not complete Milestone 4. The next checkpoint is authentication and a Postgres-backed source of truth for planner items, Inbox captures, operations, and snapshots, followed by migration from local data. Provisioning the production database requires a Netlify credits decision.
+These changes do not complete Milestone 4. The next checkpoint is authentication and a Postgres-backed source of truth for planner items, Inbox captures, operations, and snapshots, followed by migration from local data.
+
+### Checkpoint 4B — accounts and cloud foundation (implemented locally 2026-10-01)
+
+- Netlify Identity configured for invite-only registration. The account owner completes invitation acceptance and chooses a password.
+- Netlify Database migration stores account-scoped planner state, Inbox captures, recent conversation, undo history, and the last 20 planner snapshots.
+- The app gives an explicit choice when a local plan and cloud plan differ. Revision checks pause sync rather than silently overwriting another device’s work.
+- JSON backup now includes history and conversation. Cloud deletion leaves the device copy intact.
+- AI endpoints require sign-in, protecting the server-side API key from anonymous use.
+
+Production deployment and owner account acceptance must be verified before marking this checkpoint complete. Subsequent work: server-side restoration of earlier snapshots, per-operation event history, persistent unresolved questions, then goal decomposition.
+
+### Checkpoint 4C — durable Inbox review (implemented locally 2026-10-02)
+
+- Each brain-dump capture now stores its review draft with the account-scoped planner state.
+- Unapplied items remain in Inbox after a partial import and can be reopened after a refresh or cloud sync.
+- Corrections to type, day, recurrence, due day, time, duration, goal target, unit, and planning notes are saved with the draft.
+- Review item IDs are made unique before partial application, so applying one item cannot accidentally remove another.
+
+The live site remains on checkpoint 4A to conserve production deploy credits. Checkpoint 4C passed remote unsigned preview testing; account-backed recovery awaits the owner account. Next: goal decomposition, followed by snapshot restoration and operation history.
+
+### Checkpoint 4D — goal decomposition (implemented locally 2026-10-02)
+
+- Goals and open loops can become editable roadmaps with two to four milestones and one small next action.
+- Signed-in users can request an AI suggestion through a server-side, account-protected Function. Without sign-in or when AI is unavailable, an editable starter roadmap remains available.
+- Saving a roadmap does not change the schedule. **Save & plan next step** passes the action to the deterministic planner, which protects fixed commitments and free time. Editing a linked action updates its planner task.
+- Roadmaps live with their goal or open loop in local storage, backups, and account-scoped cloud state.
+
+The draft pull request and Deploy Preview carry this checkpoint while production remains on 4A. Remote unsigned flow was checked; signed-in AI/sync verification awaits the owner account. Next: restore earlier server snapshots from History, then add per-operation history.
+
+### Checkpoint 4E — server snapshot recovery (implemented locally 2026-10-02)
+
+- Signed-in History can list the last 20 account-scoped server versions.
+- Restoring a version creates a new current cloud revision in one database transaction, using an expected-revision check to protect changes made on another device.
+- The current planner is saved in Undo before restoration. The user confirms the chosen version, then can undo the restoration.
+- Cloud versions include the planner state; the current conversation remains intact. Existing cloud deletion removes both the planner and its snapshots through the database relationship.
+
+The draft preview carries this checkpoint while production remains on 4A. Signed-in end-to-end recovery awaits the owner account. Next: per-operation history and persistent unresolved questions.
+
+### Checkpoint 4F — planning memory (implemented locally 2026-10-02)
+
+- Every Undo-backed planner action now adds a concise operation record with a timestamp and a summary of changed planner blocks, goals, open loops, rules, Inbox captures, or questions. The latest 100 records remain with the planner state and the latest 50 display in History.
+- Assistant clarification questions persist in the planner state. Inbox presents pending questions with **Answer** and **Dismiss** actions. Answering opens the Planner composer, including its voice control, and resolves the question only after a successful reply.
+- Inbox capture questions are visible from the Inbox even when the review is closed, with a direct path back to the related review item.
+- The operation log and question list follow the existing local backup and account-scoped cloud sync flows.
+
+Production remains on checkpoint 4A. The draft preview still needs signed-in question and sync checks after the owner account is available. Next: a release readiness pass across the full Milestone 4 feature set.
+
+### Checkpoint 5A — daily planning intensity (implemented locally 2026-10-02)
+
+- Today offers one-tap Minimum, Normal, and Ambitious modes per weekday.
+- Minimum reserves three additional hours, Normal one additional hour, and Ambitious uses the existing protected-free-time target. All modes preserve the user's configured free-time floor and leave fixed commitments anchored.
+- Choosing a mode replans flexible work through the deterministic scheduler, saves the choice in local/cloud planner state and backups, and creates an Undo point and operation record.
+
+This is the first Milestone 5 checkpoint. Actual-vs-estimated durations, skip patterns, learned preferences, and explicit controls for those assumptions remain future checkpoints.
+
+### Checkpoint 5B — observed work (implemented locally 2026-10-02)
+
+- Finishing flexible work records its estimate and an actual duration. The user can correct actual time with a short menu, without typing.
+- A flexible block can be skipped and later brought back. Skipped blocks are excluded from scheduling and capacity calculations until restored.
+- Recent completion and skip records appear in History and are saved with local planner state, backups, and cloud sync. Undo reverses these changes.
+- The app collects observations without silently changing future task estimates.
+
+Next: summarize recurring duration and skip patterns, then let the user explicitly accept or reject a suggested estimate or preferred window.
+
+### Checkpoint 5C — user-controlled duration suggestions (implemented locally 2026-10-02)
+
+- After at least two completed blocks with the same title, Daylight uses the median of up to ten recent actual durations to suggest a revised estimate when it differs materially from the current one.
+- A suggestion is visible on an unfinished flexible block. **Use** updates only that block and reruns deterministic planning; **Ignore this suggestion** suppresses the same suggestion until restored from History.
+- Accepted and ignored choices persist with local planner state, backups, and cloud sync. Undo applies to either choice.
+- No estimate changes automatically. Preferred-window learning and completion probability remain later work.
+
+### Checkpoint 5D — work patterns and time preferences (implemented locally 2026-10-03)
+
+- Recent attempts with the same title produce a simple finished/skipped count after at least three records. The display uses up to ten attempts and does not claim a reliable success probability.
+- Completed records retain their scheduled start time. Three or more matching completed blocks in the same broad time band may generate an optional preferred-window suggestion. Skips do not count as positive evidence for a window.
+- **Prefer morning/afternoon/evening** applies the window only to the chosen unfinished flexible block, then runs deterministic planning. **Ignore this suggestion** persists until **Show again** in History. Undo covers both actions.
+- Scheduled start time is not evidence of when work actually began. Calendar dates, recurrence, and stronger adaptive signals remain later work.
+
+### Checkpoint 5E — completion outlook (verified on preview 2026-10-04)
+
+- After five matching finished/skipped attempts, an unfinished flexible block can show a completion outlook based on up to twelve recent attempts.
+- The signal uses light smoothing so small histories never display misleading 0% or 100% certainty. It names the number finished, skipped, and observed, and explicitly says the outlook is not a guarantee.
+- **Promising**, **Mixed**, and **May need support** provide a quick non-typing cue. The signal never changes duration, priority, preferred time, or schedule automatically.
+- Unit tests cover minimum evidence, all three outlook levels, title matching, and the twelve-attempt recency window. Browser testing reproduced a mixed 55% outlook from three finishes and two skips.
+- Deploy Preview 1 served the new completion-outlook code and styles at commit `94ea377` while production remained unchanged.
+
+This completes the locally planned Milestone 5 learning loop: observations, duration recommendations, preferred-window suggestions, completion signals, day modes, and explicit user control. Longer-term validation still requires real usage over calendar dates.
+
+### Checkpoint 9A — mobile readability and touch controls (implemented locally 2026-10-03)
+
+- On narrow screens, the account form starts in a compact Cloud sync disclosure so the day is closer to the top. Invitation acceptance and unresolved cloud choices still open the disclosure.
+- The phone layout increases tap areas and text sizes for navigation, weekday tabs, day modes, quick task entry, work actions, checkmarks, routine steps, and voice/chat controls.
+- Completed and skipped blocks use higher contrast. This is an early mobile pass; installability, offline behavior, device testing, and a full accessibility audit remain later work.
+
+### Checkpoint 9B — installable offline app shell (verified on preview 2026-10-04)
+
+- Daylight has a standalone web app manifest, branded home-screen icons, and a browser-native installation action when supported.
+- The planner interface and built assets are cached for offline use. Planner edits continue to save locally and queue for cloud sync after reconnecting.
+- AI, Identity, and cloud APIs remain network-only so stale server responses are never presented as current.
+- A local end-to-end test loaded Daylight with its server stopped, added a task, and preserved that task through another offline reload.
+- Deploy Preview 1 served the manifest and service worker with the expected offline fallback and network-only API exclusions. Production remains on checkpoint 4A.
+
+### Checkpoint 9C — keyboard and assistive-control baseline (verified on preview 2026-10-04)
+
+- Keyboard users can reveal a **Skip to planner** link, and all interactive controls receive a strong visible focus ring.
+- Primary navigation exposes the current section, weekday choices expose their pressed state, and task completion controls announce the task and intended action instead of only a circle or checkmark.
+- Planner chat, brain-dump input, assistant open/close state, and goal progress now have programmatic names or values for assistive technology.
+- Reduced-motion preferences suppress nonessential transitions and the loading spinner animation.
+- The production build passed automated regression tests plus manual keyboard and accessibility-tree checks. A broader screen-reader and physical-device test matrix remains part of release readiness.
+- Deploy Preview 1 exposed the skip link, labeled navigation, current-page state, task-specific completion labels, focus styling, and reduced-motion rule at commit `94ea377`.
+
+### Checkpoint 9D / 10A — phone shell and calm assistant (verified on preview 2026-10-10)
+
+- Phones use persistent bottom navigation and a thumb-reachable assistant button. The assistant opens as a focused sheet above navigation while the day remains the primary screen.
+- Routine planner actions now show brief confirmations and remain available in History instead of extending the assistant transcript.
+- Ask Daylight displays recent conversational turns by default, exposes older conversation on demand, and offers common intent shortcuts.
+- Voice conversation sends a completed speech turn automatically, speaks the reply, and returns to listening until stopped. Schedule changes still require review. Browser speech recognition remains turn based; simultaneous interruption requires a later realtime audio integration.
+- Current competitor research and Daylight's calm-accuracy differentiation are recorded in `PRODUCT_RESEARCH.md`.
+
+Deploy Preview 1 was checked at 390 × 844: bottom navigation remained anchored, the assistant started closed and opened above navigation, only real conversation turns appeared, and the page had no horizontal overflow. Physical-phone verification is still required. Production remains unchanged until the batched release audit is complete.
+
+### Checkpoint 10B — direct next-action controls (implemented locally 2026-10-10)
+
+- Today identifies the active, next, or most recently missed unfinished block and gives it a prominent card above the schedule summary.
+- **Done** completes the block immediately. Flexible work also offers **Later**, using the existing reversible skip flow.
+- **Help me start** opens Daylight and asks for one concrete first step without asking it to change the schedule.
+- Finished, skipped, and unscheduled blocks are excluded. When the selected day is clear, the card offers a direct path to Inbox.
+- Unit tests cover active, upcoming, overdue, other-day, and all-clear selection.
+
+This checkpoint is audited locally in `PHASE10B_AUDIT.md` and is intentionally held from another Netlify preview deployment to conserve credits.
+
+### Checkpoint 10C — one-screen Today design (verified on preview 2026-10-10)
+
+- Today is a bounded command center rather than a long page. Its schedule scrolls inside a dedicated region while the immediate action and essential controls remain visible.
+- The Now card and workload/capacity glance share one overview on wider screens and compress into a phone-sized hierarchy on narrow screens.
+- Phone headers, weekday controls, workload modes, quick add, planner status, and schedule heading were tightened without reducing the established touch targets.
+- Visual hierarchy uses one warm emphasis color, restrained surfaces, and progressive detail instead of adding more navigation layers.
+
+The production build and regression suite pass. Deploy Preview 1 was checked at 390 × 844 and 1280 × 800: the page did not scroll, the schedule had its own scroll region, immediate controls stayed visible, and no horizontal overflow appeared. Physical-device checks remain; see `PHASE10C_AUDIT.md`.
+
+### Checkpoint 11A — Guided Mode foundation (responsive preview verified 2026-10-10)
+
+- The Now card can open or resume a focused step-by-step guide without navigating away from Today.
+- Guide setup supports cooking, interview, study, project, and general contexts. The AI asks at most four material questions, then produces materials and 3–12 concrete steps.
+- The active guide presents one step prominently, with a progress map, checkmarks, time estimates, specific safety notes, and Back/Next controls.
+- Guide progress is saved with local state, backups, and cloud sync. Step completion is undoable. Finishing a guide does not silently complete or reschedule its source task.
+- The new account-protected Function validates origin, request size, category, and structured provider output. Its instructions prohibit high-risk procedural guidance and schedule changes.
+
+The complete regression suite and production build pass. Deploy Preview 1 passed the phone setup-flow inspection with no page overflow, and the final spacing correction keeps short forms top aligned. Signed-in cooking/interview generation and physical-phone execution checks remain; see `PHASE11A_AUDIT.md`.
+
+### Checkpoint 4G — AI endpoint safeguards (implemented locally 2026-10-03)
+
+- Assistant and brain-dump AI requests now use the same signed-in origin check already used by goal breakdown and cloud write operations.
+- Both endpoints reject oversized request bodies before parsing and sending data to the AI provider. The assistant message and brain-dump text also have explicit length limits.
+- Account sign-in and an actual provider request are still required to verify that the live preview's AI connection succeeds end to end.
+
+### Checkpoint 4H — invitation sign-in (verified on preview 2026-10-04)
+
+- Invitation acceptance now completes a normal sign-in so Netlify Functions receive the Identity cookie needed for account-scoped requests.
+- The invited owner signed in and Daylight displayed “Synced across your devices.” The session survived a full page reload.
+- Production remains on checkpoint 4A while the draft preview is audited.
+
+### Checkpoint 4I — cloud comparison (verified on preview 2026-10-04)
+
+- Cloud data is compared by content, ignoring PostgreSQL JSONB object-key order. A reload no longer raises a false local-versus-cloud choice.
+- The comparison covers planner state, Undo history, and conversation. Actual differences still require an explicit choice.
+- A temporary task saved as cloud version 2; Undo removed it and saved version 3. The owner plan no longer contains the test task.
+- A live AI-provider request and server snapshot restoration remain to be checked before production release.
+
+### Checkpoint 4J — private AI setup check (verified on preview 2026-10-04)
+
+- The Account panel can check the server-side Anthropic key and selected model without sending planner details or conversation.
+- The check is manual, signed-in, and origin protected. It provides clear setup errors while keeping the key server-side.
+- The live preview accepted the key and selected model. A successful setup check does not replace a live planning reply test.
+
+### Checkpoint 4K — conversational AI and session recovery (verified on preview 2026-10-04)
+
+- A signed-in live AI request returned a planning tip without changing the schedule, and cloud sync stayed active.
+- Account-protected requests refresh the browser session and report unexpected server responses clearly. The assistant receives the user's local weekday so it does not treat a future day's blocks as past.
+- Cloud restore now has an in-app confirmation and checks cloud state after an uncertain response. Live restore and Undo both succeeded: the temporary test task was removed again, version 7 is current, and a full reload stayed synced. The new in-app confirmation and its cancel action were verified on the preview.
